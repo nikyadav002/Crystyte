@@ -287,17 +287,23 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       const { renderer, scene, camera } = stateRef.current
       if (!renderer) return
 
-      const origW = renderer.domElement.width
-      const origH = renderer.domElement.height
       const origBg = scene.background
+      const dpr    = renderer.getPixelRatio()
+      // domElement.width = cssWidth * dpr — we need CSS dims for setSize
+      const cssW = renderer.domElement.width  / dpr
+      const cssH = renderer.domElement.height / dpr
 
       scene.background = transparent ? null : new THREE.Color(0x0f1117)
-      renderer.setSize(origW * scale, origH * scale, false)
+      // Temporarily set pixelRatio to 1 so setSize maps 1:1 to canvas pixels
+      renderer.setPixelRatio(1)
+      renderer.setSize(cssW * scale, cssH * scale, false)
       renderer.render(scene, camera)
       const dataURL = renderer.domElement.toDataURL('image/png')
 
+      // Restore
+      renderer.setPixelRatio(dpr)
+      renderer.setSize(cssW, cssH, false)
       scene.background = origBg
-      renderer.setSize(origW, origH, false)
       renderer.render(scene, camera)
 
       const a = document.createElement('a')
