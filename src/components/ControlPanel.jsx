@@ -7,27 +7,16 @@ export const DISPLAY_MODES = [
 export default function ControlPanel({
   displayMode, onDisplayMode,
   supercell,   onSupercell,
-  onReset,
-  onOpen,
+  cameraMode,  onCameraMode,
+  onReset, onOpen,
   exportScale, onExportScale,
   transparentBg, onTransparentBg,
   onExport,
   hasStructure,
 }) {
-  const [na, nb, nc] = supercell
-
-  const scaleBtn = (v) => (
-    <button
-      key={v}
-      className={`btn-scale${exportScale === v ? ' active' : ''}`}
-      onClick={() => onExportScale(v)}
-    >
-      {v}×
-    </button>
-  )
-
   return (
     <div className="control-panel">
+
       {/* File */}
       <div className="ctrl-group">
         <button className="btn-icon" onClick={onOpen} title="Open file">
@@ -52,15 +41,31 @@ export default function ControlPanel({
         <span className="ctrl-label">Mode</span>
         <div className="btn-group">
           {DISPLAY_MODES.map(m => (
-            <button
-              key={m.id}
+            <button key={m.id}
               className={`btn-mode${displayMode === m.id ? ' active' : ''}`}
               onClick={() => onDisplayMode(m.id)}
               disabled={!hasStructure}
-            >
-              {m.label}
-            </button>
+            >{m.label}</button>
           ))}
+        </div>
+      </div>
+
+      <div className="ctrl-divider" />
+
+      {/* Camera projection */}
+      <div className="ctrl-group">
+        <span className="ctrl-label">Camera</span>
+        <div className="btn-group">
+          <button
+            className={`btn-mode${cameraMode === 'perspective' ? ' active' : ''}`}
+            onClick={() => onCameraMode('perspective')}
+            disabled={!hasStructure}
+          >Perspective</button>
+          <button
+            className={`btn-mode${cameraMode === 'ortho' ? ' active' : ''}`}
+            onClick={() => onCameraMode('ortho')}
+            disabled={!hasStructure}
+          >Ortho</button>
         </div>
       </div>
 
@@ -73,10 +78,8 @@ export default function ControlPanel({
           {['a', 'b', 'c'].map((axis, i) => (
             <div key={axis} className="supercell-axis">
               <span className="axis-label">{axis}</span>
-              <input
-                type="range" min="1" max="3" step="1"
-                value={supercell[i]}
-                disabled={!hasStructure}
+              <input type="range" min="1" max="3" step="1"
+                value={supercell[i]} disabled={!hasStructure}
                 onChange={(e) => {
                   const next = [...supercell]
                   next[i] = parseInt(e.target.value)
@@ -96,25 +99,24 @@ export default function ControlPanel({
         <span className="ctrl-label">Export PNG</span>
         <div className="export-row">
           <div className="btn-group">
-            {[1, 2, 4].map(scaleBtn)}
+            {[1, 2, 4].map(v => (
+              <button key={v}
+                className={`btn-scale${exportScale === v ? ' active' : ''}`}
+                onClick={() => onExportScale(v)}
+              >{v}×</button>
+            ))}
           </div>
           <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={transparentBg}
-              onChange={(e) => onTransparentBg(e.target.checked)}
-            />
+            <input type="checkbox" checked={transparentBg}
+              onChange={(e) => onTransparentBg(e.target.checked)} />
             Transparent
           </label>
-          <button
-            className="btn-primary btn-export"
-            onClick={onExport}
-            disabled={!hasStructure}
-          >
+          <button className="btn-primary btn-export" onClick={onExport} disabled={!hasStructure}>
             Save PNG
           </button>
         </div>
       </div>
+
     </div>
   )
 }

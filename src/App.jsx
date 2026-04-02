@@ -14,6 +14,7 @@ export default function App() {
   const [customColors,  setCustomColors]  = useState({})
   const [exportScale,   setExportScale]   = useState(2)
   const [transparentBg, setTransparentBg] = useState(false)
+  const [cameraMode,    setCameraMode]    = useState('perspective')
   const [loading,       setLoading]       = useState(false)
   const [error,         setError]         = useState(null)
 
@@ -33,11 +34,7 @@ export default function App() {
 
     w.onmessage = ({ data }) => {
       setLoading(false)
-      if (data.error) {
-        setError(data.error)
-      } else {
-        setStructure(data.structure)
-      }
+      if (data.error) { setError(data.error) } else { setStructure(data.structure) }
       w.terminate()
     }
     w.onerror = (e) => {
@@ -52,13 +49,9 @@ export default function App() {
     setCustomColors(prev => ({ ...prev, [sym]: color }))
   }, [])
 
-  const handleExport = useCallback(() => {
-    viewerRef.current?.exportPNG(exportScale, transparentBg)
-  }, [exportScale, transparentBg])
-
-  const handleReset = useCallback(() => viewerRef.current?.resetView(), [])
-
-  const handleOpen = useCallback(() => fileInputRef.current?.click(), [])
+  const handleExport  = useCallback(() => viewerRef.current?.exportPNG(exportScale, transparentBg), [exportScale, transparentBg])
+  const handleReset   = useCallback(() => viewerRef.current?.resetView(), [])
+  const handleOpen    = useCallback(() => fileInputRef.current?.click(), [])
 
   const onInputChange = useCallback((e) => {
     const f = e.target.files[0]
@@ -83,10 +76,7 @@ export default function App() {
         </div>
 
         {loading && (
-          <div className="status-badge loading-badge">
-            <span className="spinner" />
-            Parsing…
-          </div>
+          <div className="status-badge loading-badge"><span className="spinner" /> Parsing…</div>
         )}
         {error && (
           <div className="status-badge error-badge">
@@ -95,20 +85,14 @@ export default function App() {
           </div>
         )}
 
-        <input
-          ref={fileInputRef}
-          type="file"
+        <input ref={fileInputRef} type="file"
           accept=".cif,.xyz,.poscar,.contcar,.vasp,POSCAR,CONTCAR"
-          style={{ display: 'none' }}
-          onChange={onInputChange}
-        />
+          style={{ display: 'none' }} onChange={onInputChange} />
       </header>
 
       <div className="app-body">
         <main className="viewer-area">
-          {!structure && !loading && (
-            <DropZone onFile={handleFile} />
-          )}
+          {!structure && !loading && <DropZone onFile={handleFile} />}
           <CrystalViewer
             ref={viewerRef}
             structure={structure}
@@ -116,14 +100,11 @@ export default function App() {
             supercell={supercell}
             customColors={customColors}
             transparentBg={transparentBg}
+            cameraMode={cameraMode}
           />
         </main>
 
-        <InfoPanel
-          structure={structure}
-          customColors={customColors}
-          onColorChange={handleColorChange}
-        />
+        <InfoPanel structure={structure} customColors={customColors} onColorChange={handleColorChange} />
       </div>
 
       <ControlPanel
@@ -131,6 +112,7 @@ export default function App() {
         supercell={supercell}           onSupercell={setSupercell}
         exportScale={exportScale}       onExportScale={setExportScale}
         transparentBg={transparentBg}   onTransparentBg={setTransparentBg}
+        cameraMode={cameraMode}         onCameraMode={setCameraMode}
         onReset={handleReset}
         onOpen={handleOpen}
         onExport={handleExport}
