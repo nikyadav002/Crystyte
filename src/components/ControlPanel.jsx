@@ -10,7 +10,6 @@ export default function ControlPanel({
   cameraMode,  onCameraMode,
   onReset, onOpen,
   exportScale, onExportScale,
-  transparentBg, onTransparentBg,
   onExport,
   hasStructure,
 }) {
@@ -52,20 +51,17 @@ export default function ControlPanel({
 
       <div className="ctrl-divider" />
 
-      {/* Camera projection */}
+      {/* Camera */}
       <div className="ctrl-group">
         <span className="ctrl-label">Camera</span>
         <div className="btn-group">
-          <button
-            className={`btn-mode${cameraMode === 'perspective' ? ' active' : ''}`}
-            onClick={() => onCameraMode('perspective')}
-            disabled={!hasStructure}
-          >Perspective</button>
-          <button
-            className={`btn-mode${cameraMode === 'ortho' ? ' active' : ''}`}
-            onClick={() => onCameraMode('ortho')}
-            disabled={!hasStructure}
-          >Ortho</button>
+          {['perspective', 'ortho'].map(m => (
+            <button key={m}
+              className={`btn-mode${cameraMode === m ? ' active' : ''}`}
+              onClick={() => onCameraMode(m)}
+              disabled={!hasStructure}
+            >{m === 'perspective' ? 'Persp' : 'Ortho'}</button>
+          ))}
         </div>
       </div>
 
@@ -74,20 +70,21 @@ export default function ControlPanel({
       {/* Supercell */}
       <div className="ctrl-group">
         <span className="ctrl-label">Supercell</span>
-        <div className="supercell-controls">
+        <div className="supercell-matrix">
           {['a', 'b', 'c'].map((axis, i) => (
-            <div key={axis} className="supercell-axis">
-              <span className="axis-label">{axis}</span>
-              <input type="range" min="1" max="3" step="1"
-                value={supercell[i]} disabled={!hasStructure}
+            <>
+              {i > 0 && <span key={`sep${i}`} className="supercell-sep">×</span>}
+              <input
+                key={axis}
+                type="number" min="1" max="3"
+                value={supercell[i]}
+                disabled={!hasStructure}
                 onChange={(e) => {
-                  const next = [...supercell]
-                  next[i] = parseInt(e.target.value)
-                  onSupercell(next)
+                  const v = Math.max(1, Math.min(3, parseInt(e.target.value) || 1))
+                  const next = [...supercell]; next[i] = v; onSupercell(next)
                 }}
               />
-              <span className="axis-val">{supercell[i]}</span>
-            </div>
+            </>
           ))}
         </div>
       </div>
@@ -106,11 +103,6 @@ export default function ControlPanel({
               >{v}×</button>
             ))}
           </div>
-          <label className="checkbox-label">
-            <input type="checkbox" checked={transparentBg}
-              onChange={(e) => onTransparentBg(e.target.checked)} />
-            Transparent
-          </label>
           <button className="btn-primary btn-export" onClick={onExport} disabled={!hasStructure}>
             Save PNG
           </button>

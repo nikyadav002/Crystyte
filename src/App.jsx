@@ -13,8 +13,8 @@ export default function App() {
   const [supercell,     setSupercell]     = useState([1, 1, 1])
   const [customColors,  setCustomColors]  = useState({})
   const [exportScale,   setExportScale]   = useState(2)
-  const [transparentBg, setTransparentBg] = useState(false)
   const [cameraMode,    setCameraMode]    = useState('perspective')
+  const [theme,         setTheme]         = useState('light')
   const [loading,       setLoading]       = useState(false)
   const [error,         setError]         = useState(null)
 
@@ -27,21 +27,15 @@ export default function App() {
     setError(null)
     setCustomColors({})
     setSupercell([1, 1, 1])
-
     workerRef.current?.terminate()
     const w = createWorker()
     workerRef.current = w
-
     w.onmessage = ({ data }) => {
       setLoading(false)
       if (data.error) { setError(data.error) } else { setStructure(data.structure) }
       w.terminate()
     }
-    w.onerror = (e) => {
-      setLoading(false)
-      setError(e.message ?? 'Parse error')
-      w.terminate()
-    }
+    w.onerror = (e) => { setLoading(false); setError(e.message ?? 'Parse error'); w.terminate() }
     w.postMessage({ text, filename })
   }, [])
 
@@ -49,9 +43,9 @@ export default function App() {
     setCustomColors(prev => ({ ...prev, [sym]: color }))
   }, [])
 
-  const handleExport  = useCallback(() => viewerRef.current?.exportPNG(exportScale, transparentBg), [exportScale, transparentBg])
-  const handleReset   = useCallback(() => viewerRef.current?.resetView(), [])
-  const handleOpen    = useCallback(() => fileInputRef.current?.click(), [])
+  const handleExport = useCallback(() => viewerRef.current?.exportPNG(exportScale), [exportScale])
+  const handleReset  = useCallback(() => viewerRef.current?.resetView(), [])
+  const handleOpen   = useCallback(() => fileInputRef.current?.click(), [])
 
   const onInputChange = useCallback((e) => {
     const f = e.target.files[0]
@@ -62,8 +56,10 @@ export default function App() {
     e.target.value = ''
   }, [handleFile])
 
+  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light')
+
   return (
-    <div className="app">
+    <div className="app" data-theme={theme}>
       <header className="app-header">
         <div className="logo">
           <svg className="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="22" height="22">
@@ -75,15 +71,37 @@ export default function App() {
           <span className="logo-text">crystyte</span>
         </div>
 
-        {loading && (
-          <div className="status-badge loading-badge"><span className="spinner" /> Parsing…</div>
-        )}
+        {loading && <div className="status-badge loading-badge"><span className="spinner" /> Parsing…</div>}
         {error && (
           <div className="status-badge error-badge">
             <span>Parse error — {error.slice(0, 80)}</span>
             <button className="badge-close" onClick={() => setError(null)}>×</button>
           </div>
         )}
+
+        <div className="header-right">
+          <button className="btn-theme" onClick={toggleTheme} title="Toggle theme">
+            {theme === 'light' ? (
+              /* moon icon */
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+            ) : (
+              /* sun icon */
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="5"/>
+                <line x1="12" y1="1"  x2="12" y2="3"/>
+                <line x1="12" y1="21" x2="12" y2="23"/>
+                <line x1="4.22" y1="4.22"  x2="5.64" y2="5.64"/>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                <line x1="1"  y1="12" x2="3"  y2="12"/>
+                <line x1="21" y1="12" x2="23" y2="12"/>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+              </svg>
+            )}
+          </button>
+        </div>
 
         <input ref={fileInputRef} type="file"
           accept=".cif,.xyz,.poscar,.contcar,.vasp,POSCAR,CONTCAR"
@@ -99,11 +117,9 @@ export default function App() {
             displayMode={displayMode}
             supercell={supercell}
             customColors={customColors}
-            transparentBg={transparentBg}
             cameraMode={cameraMode}
           />
         </main>
-
         <InfoPanel structure={structure} customColors={customColors} onColorChange={handleColorChange} />
       </div>
 
@@ -111,7 +127,6 @@ export default function App() {
         displayMode={displayMode}       onDisplayMode={setDisplayMode}
         supercell={supercell}           onSupercell={setSupercell}
         exportScale={exportScale}       onExportScale={setExportScale}
-        transparentBg={transparentBg}   onTransparentBg={setTransparentBg}
         cameraMode={cameraMode}         onCameraMode={setCameraMode}
         onReset={handleReset}
         onOpen={handleOpen}
