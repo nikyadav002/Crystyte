@@ -1,11 +1,4 @@
-const DISPLAY_MODES = [
-  { id: 'ball-stick', label: 'Ball & Stick' },
-  { id: 'spacefill',  label: 'Spacefill'    },
-  { id: 'stick',      label: 'Stick'        },
-]
-
 export default function ControlPanel({
-  displayMode, onDisplayMode,
   supercell,   onSupercell,
   cameraMode,  onCameraMode,
   onViewAxis,
@@ -32,22 +25,6 @@ export default function ControlPanel({
           </svg>
           <span>Reset</span>
         </button>
-      </div>
-
-      <div className="ctrl-divider" />
-
-      {/* Display mode */}
-      <div className="ctrl-group">
-        <span className="ctrl-label">Mode</span>
-        <div className="btn-group">
-          {DISPLAY_MODES.map(m => (
-            <button key={m.id}
-              className={`btn-mode${displayMode === m.id ? ' active' : ''}`}
-              onClick={() => onDisplayMode(m.id)}
-              disabled={!hasStructure}
-            >{m.label}</button>
-          ))}
-        </div>
       </div>
 
       <div className="ctrl-divider" />

@@ -1,17 +1,28 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import CrystalViewer from './components/CrystalViewer.jsx'
 import DropZone     from './components/DropZone.jsx'
 import InfoPanel    from './components/InfoPanel.jsx'
 import ControlPanel from './components/ControlPanel.jsx'
+import { getBondRule, getBondRuleKey } from './lib/bondingLogic.js'
+import { getElement } from './lib/elements.js'
+import { BOND_SCALE, MIN_BOND } from './lib/structure.js'
 
 const createWorker = () =>
   new Worker(new URL('./workers/parser.worker.js', import.meta.url), { type: 'module' })
+
+const DISPLAY_MODES = [
+  { id: 'ball-stick', label: 'Ball & Stick' },
+  { id: 'spacefill',  label: 'Spacefill'    },
+  { id: 'stick',      label: 'Stick'        },
+]
 
 export default function App() {
   const [structure,     setStructure]     = useState(null)
   const [displayMode,   setDisplayMode]   = useState('ball-stick')
   const [supercell,     setSupercell]     = useState([1, 1, 1])
   const [customColors,  setCustomColors]  = useState({})
+  const [bondOverrides, setBondOverrides] = useState({})
+  const [bondPair,      setBondPair]      = useState(['C', 'C'])
   const [exportScale,   setExportScale]   = useState(4)
   const [cameraMode,    setCameraMode]    = useState('ortho')
   const [theme,         setTheme]         = useState('light')
@@ -26,6 +37,7 @@ export default function App() {
     setLoading(true)
     setError(null)
     setCustomColors({})
+    setBondOverrides({})
     setSupercell([1, 1, 1])
     workerRef.current?.terminate()
     const w = createWorker()
@@ -43,10 +55,64 @@ export default function App() {
     setCustomColors(prev => ({ ...prev, [sym]: color }))
   }, [])
 
+  const handleBondPairChange = useCallback((pair) => {
+    setBondPair(pair)
+  }, [])
+
+  const elementSymbols = useMemo(() => (
+    structure?.atoms
+      ? [...new Set(structure.atoms.map(a => a.symbol))].sort()
+      : []
+  ), [structure])
+
+  const effectiveBondPair = useMemo(() => {
+    if (!elementSymbols.length) return bondPair
+    if (
+      bondPair[0] &&
+      bondPair[1] &&
+      elementSymbols.includes(bondPair[0]) &&
+      elementSymbols.includes(bondPair[1])
+    ) return bondPair
+    return [elementSymbols[0], elementSymbols[1] ?? elementSymbols[0]]
+  }, [bondPair, elementSymbols])
+
+  const handleBondRuleChange = useCallback((field, value) => {
+    const parsed = Number.parseFloat(value)
+    const nextValue = Number.isFinite(parsed) ? parsed : 0
+    const key = getBondRuleKey(effectiveBondPair[0], effectiveBondPair[1])
+    setBondOverrides(prev => {
+      const base = prev[key] ?? getBondRule(effectiveBondPair[0], effectiveBondPair[1]) ?? {
+        min: MIN_BOND,
+        max: (getElement(effectiveBondPair[0]).radius + getElement(effectiveBondPair[1]).radius) * BOND_SCALE,
+      }
+      return {
+        ...prev,
+        [key]: {
+          min: field === 'min' ? nextValue : base.min,
+          max: field === 'max' ? nextValue : base.max,
+        },
+      }
+    })
+  }, [effectiveBondPair])
+
+  const handleBondRuleReset = useCallback(() => {
+    const key = getBondRuleKey(effectiveBondPair[0], effectiveBondPair[1])
+    setBondOverrides(prev => {
+      if (!(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }, [effectiveBondPair])
+
   const handleExport = useCallback(() => viewerRef.current?.exportPNG(exportScale), [exportScale])
   const handleReset  = useCallback(() => viewerRef.current?.resetView(), [])
   const handleOpen   = useCallback(() => fileInputRef.current?.click(), [])
   const handleViewAxis = useCallback((axis) => viewerRef.current?.viewAxis(axis), [])
+
+  const activeBondRule = effectiveBondPair[0] && effectiveBondPair[1]
+    ? bondOverrides[getBondRuleKey(effectiveBondPair[0], effectiveBondPair[1])] ?? getBondRule(effectiveBondPair[0], effectiveBondPair[1])
+    : null
 
   const onInputChange = useCallback((e) => {
     const f = e.target.files[0]
@@ -81,6 +147,19 @@ export default function App() {
         )}
 
         <div className="header-right">
+          <label className="header-select-wrap">
+            <span className="header-select-label">Mode</span>
+            <select
+              className="header-select"
+              value={displayMode}
+              onChange={(e) => setDisplayMode(e.target.value)}
+              disabled={!structure}
+            >
+              {DISPLAY_MODES.map(mode => (
+                <option key={mode.id} value={mode.id}>{mode.label}</option>
+              ))}
+            </select>
+          </label>
           <button className="btn-theme" onClick={toggleTheme} title="Toggle theme">
             {theme === 'light' ? (
               /* moon icon */
@@ -119,13 +198,22 @@ export default function App() {
             supercell={supercell}
             customColors={customColors}
             cameraMode={cameraMode}
+            bondOverrides={bondOverrides}
           />
         </main>
-        <InfoPanel structure={structure} customColors={customColors} onColorChange={handleColorChange} />
+        <InfoPanel
+          structure={structure}
+          customColors={customColors}
+          onColorChange={handleColorChange}
+          bondPair={effectiveBondPair}
+          onBondPairChange={handleBondPairChange}
+          bondRule={activeBondRule}
+          onBondRuleChange={handleBondRuleChange}
+          onBondRuleReset={handleBondRuleReset}
+        />
       </div>
 
       <ControlPanel
-        displayMode={displayMode}       onDisplayMode={setDisplayMode}
         supercell={supercell}           onSupercell={setSupercell}
         exportScale={exportScale}       onExportScale={setExportScale}
         cameraMode={cameraMode}         onCameraMode={setCameraMode}

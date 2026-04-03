@@ -265,7 +265,7 @@ function orientCamera(camera, controls, center, radius, direction) {
 
 // =============================================================================
 const CrystalViewer = forwardRef(function CrystalViewer(
-  { structure, displayMode, supercell, customColors, cameraMode },
+  { structure, displayMode, supercell, customColors, cameraMode, bondOverrides },
   ref,
 ) {
   const mountRef  = useRef(null)
@@ -503,7 +503,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       }
     }
 
-    const displayBonds = mode.showBonds ? detectBonds(candidateAtoms, null, null) : []
+    const displayBonds = mode.showBonds ? detectBonds(candidateAtoms, null, null, bondOverrides) : []
     const visible = new Set()
     for (let i = 0; i < candidateAtoms.length; i++) {
       if (candidateAtoms[i].inside) visible.add(i)
@@ -636,7 +636,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       stateRef.current.resetPos    = cam.position.clone()
       stateRef.current.resetTarget = controls.target.clone()
     }
-  }, [structure, displayMode, supercell, customColors])
+  }, [structure, displayMode, supercell, customColors, bondOverrides])
 
   // ---- Imperative handle --------------------------------------------------
   useImperativeHandle(ref, () => ({

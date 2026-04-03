@@ -1,6 +1,6 @@
 import { getElement } from './elements.js'
 import { mat3Inv, fracToCart, cartToFrac, micFrac, getLatticeParams, centroid } from './math.js'
-import { getBondRule } from './bondingLogic.js'
+import { getBondRule, getBondRuleKey } from './bondingLogic.js'
 
 // ---- Formula ----------------------------------------------------------------
 
@@ -112,7 +112,7 @@ export const BOND_SCALE = 1.15   // tolerance factor on sum of covalent radii
 export const MIN_BOND = 0.4      // ignore pairs closer than this (Å)
 const MAX_ATOMS_FOR_BONDS = 8000
 
-export function detectBonds(atoms, lattice, Linv) {
+export function detectBonds(atoms, lattice, Linv, bondOverrides = {}) {
   if (!atoms || atoms.length === 0) return []
   if (atoms.length > MAX_ATOMS_FOR_BONDS) return []
 
@@ -128,7 +128,7 @@ export function detectBonds(atoms, lattice, Linv) {
       const rj = atoms[j].position
       const rj_sym = atoms[j].symbol
       const defaultMaxBond = (ri_rad + getElement(rj_sym).radius) * BOND_SCALE
-      const rule = getBondRule(ri_sym, rj_sym)
+      const rule = bondOverrides[getBondRuleKey(ri_sym, rj_sym)] ?? getBondRule(ri_sym, rj_sym)
       const minBond = Math.max(MIN_BOND, rule?.min ?? 0)
       const maxBond = rule?.max ?? defaultMaxBond
 

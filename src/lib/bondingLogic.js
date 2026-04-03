@@ -3655,3 +3655,8 @@ export function getBondRule(symA, symB) {
   const rule = BOND_RULES[key]
   return rule ? { min: rule[0], max: rule[1] } : null
 }
+
+export function getBondRuleKey(symA, symB) {
+  if (!symA || !symB) return ''
+  return [symA, symB].sort().join('|')
+}

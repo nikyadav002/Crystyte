@@ -1,7 +1,18 @@
 import { useCallback } from 'react'
-import { ELEMENTS, getElementColor } from '../lib/elements.js'
+import { ELEMENTS, getElement, getElementColor } from '../lib/elements.js'
+import { getBondRule } from '../lib/bondingLogic.js'
+import { BOND_SCALE, MIN_BOND } from '../lib/structure.js'
 
-export default function InfoPanel({ structure, customColors, onColorChange }) {
+export default function InfoPanel({
+  structure,
+  customColors,
+  onColorChange,
+  bondPair,
+  onBondPairChange,
+  bondRule,
+  onBondRuleChange,
+  onBondRuleReset,
+}) {
   const fmt = (n, d = 4) => (typeof n === 'number' ? n.toFixed(d) : '—')
 
   const elementCounts = {}
@@ -14,6 +25,16 @@ export default function InfoPanel({ structure, customColors, onColorChange }) {
   const handleColor = useCallback((sym, color) => {
     onColorChange?.(sym, color)
   }, [onColorChange])
+
+  const uniqueSymbols = Object.keys(elementCounts).sort()
+  const activePair = bondPair?.length === 2
+    ? bondPair
+    : [uniqueSymbols[0] ?? 'C', uniqueSymbols[1] ?? uniqueSymbols[0] ?? 'C']
+  const baseBondRule = getBondRule(activePair[0], activePair[1]) ?? {
+    min: MIN_BOND,
+    max: (getElement(activePair[0]).radius + getElement(activePair[1]).radius) * BOND_SCALE,
+  }
+  const activeBondRule = bondRule ?? baseBondRule
 
   if (!structure) {
     return (
@@ -74,6 +95,61 @@ export default function InfoPanel({ structure, customColors, onColorChange }) {
                 </div>
               )
             })}
+          </div>
+        </section>
+      )}
+
+      {uniqueSymbols.length > 0 && (
+        <section className="info-section">
+          <h3 className="info-heading">Bond Criteria</h3>
+          <div className="bond-criteria">
+            <div className="bond-criteria-row">
+              <label className="bond-criteria-field">
+                <span>A1</span>
+                <select
+                  value={activePair[0]}
+                  onChange={(e) => onBondPairChange?.([e.target.value, activePair[1]])}
+                >
+                  {uniqueSymbols.map(sym => <option key={`a1-${sym}`} value={sym}>{sym}</option>)}
+                </select>
+              </label>
+              <label className="bond-criteria-field">
+                <span>A2</span>
+                <select
+                  value={activePair[1]}
+                  onChange={(e) => onBondPairChange?.([activePair[0], e.target.value])}
+                >
+                  {uniqueSymbols.map(sym => <option key={`a2-${sym}`} value={sym}>{sym}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="bond-criteria-row">
+              <label className="bond-criteria-field">
+                <span>Min (A)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={Number.isFinite(activeBondRule.min) ? activeBondRule.min : 0}
+                  onChange={(e) => onBondRuleChange?.('min', e.target.value)}
+                />
+              </label>
+              <label className="bond-criteria-field">
+                <span>Max (A)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={Number.isFinite(activeBondRule.max) ? activeBondRule.max : 0}
+                  onChange={(e) => onBondRuleChange?.('max', e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="bond-criteria-actions">
+              <button className="btn-icon btn-inline" onClick={onBondRuleReset} type="button">
+                Use Default
+              </button>
+            </div>
           </div>
         </section>
       )}

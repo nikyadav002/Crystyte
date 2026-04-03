@@ -68,6 +68,22 @@ body { background: var(--bg); overflow: hidden; }
 }
 
 .header-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.header-select-wrap { display: flex; align-items: center; gap: 8px; }
+.header-select-label {
+  font-size: 11px; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.header-select {
+  height: 30px;
+  min-width: 128px;
+  padding: 0 28px 0 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 12px;
+}
+.header-select:disabled { opacity: 0.45; }
 
 .app-body { display: flex; flex: 1; overflow: hidden; }
 
@@ -202,6 +218,24 @@ button { cursor: pointer; }
 .swatch-label:hover { color: var(--text-bright); }
 .swatch-sym   { font-size: 12px; font-weight: 500; color: var(--text); }
 .swatch-count { font-size: 11px; color: var(--text-dim); }
+
+.bond-criteria { display: flex; flex-direction: column; gap: 8px; }
+.bond-criteria-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bond-criteria-field { display: flex; flex-direction: column; gap: 4px; }
+.bond-criteria-field span { font-size: 11px; color: var(--text-dim); }
+.bond-criteria-field select,
+.bond-criteria-field input {
+  height: 28px;
+  width: 100%;
+  padding: 0 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-bright);
+  font-size: 12px;
+}
+.bond-criteria-actions { display: flex; justify-content: flex-end; }
+.btn-inline { padding: 4px 10px; font-size: 11px; }
 
 /* ---- Control panel (bottom bar) ---- */
 .control-panel {
