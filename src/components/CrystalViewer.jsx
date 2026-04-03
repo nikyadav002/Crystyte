@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { getElement, getElementColor } from '../lib/elements.js'
 import { expandSupercell, detectBonds, cellBoxLines } from '../lib/structure.js'
+import { cartToFrac } from '../lib/math.js'
 
 const MODES = {
   'ball-stick': { atomFactor: 0.35, bondRadius: 0.10, showBonds: true,  showAtoms: true  },
@@ -20,6 +21,7 @@ const LIGHT_PROFILES = {
 const CELL_EDGE_COLOR = 0x000000
 const AXIS_COLORS = { a: '#d35d5d', b: '#5ea96e', c: '#5d7bd6' }
 const AXIS_OVERLAY_SIZE = 164
+const SHELL_CART_MARGIN = 3.2
 
 function makeAtomMaterial()  {
   return new THREE.MeshLambertMaterial()
@@ -119,6 +121,26 @@ function makeLabelSprite(text, color) {
 function maxLatticeLength(lattice) {
   if (!lattice?.length) return 1
   return lattice.reduce((maxLen, v) => Math.max(maxLen, Math.hypot(v[0], v[1], v[2])), 1)
+}
+
+function latticeShiftVector(lattice, shift) {
+  return [
+    shift[0] * lattice[0][0] + shift[1] * lattice[1][0] + shift[2] * lattice[2][0],
+    shift[0] * lattice[0][1] + shift[1] * lattice[1][1] + shift[2] * lattice[2][1],
+    shift[0] * lattice[0][2] + shift[1] * lattice[1][2] + shift[2] * lattice[2][2],
+  ]
+}
+
+function shellMargins(lattice) {
+  return lattice.map(v => SHELL_CART_MARGIN / Math.max(Math.hypot(v[0], v[1], v[2]), 1e-6))
+}
+
+function isInsideExpandedCell(frac, margins) {
+  return frac.every((value, i) => value >= -margins[i] && value <= 1 + margins[i])
+}
+
+function isInsideCell(frac) {
+  return frac.every(value => value >= -1e-6 && value <= 1 + 1e-6)
 }
 
 function disposeObjectMaterials(object) {
@@ -418,34 +440,50 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     const group = new THREE.Group()
     group.name  = 'structureGroup'
 
-    const bonds = mode.showBonds ? detectBonds(atoms, lattice, Linv) : []
+    const margins = lattice ? shellMargins(lattice) : null
+    const allAtoms = []
+    const atomKeys = new Set()
+    const shifts = lattice
+      ? [-1, 0, 1].flatMap(sa => [-1, 0, 1].flatMap(sb => [-1, 0, 1].map(sc => [sa, sb, sc])))
+      : [[0, 0, 0]]
 
-    // Ghost atoms & reverse bonds for cross-boundary bonds
-    const ghostAtoms   = []
-    const reverseBonds = []
-    if (lattice && bonds.length) {
-      const seen = new Set()
-      const addGhost = (sym, pos) => {
-        const k = sym + pos.map(x => Math.round(x*100)).join(',')
-        if (seen.has(k)) return; seen.add(k)
-        ghostAtoms.push({ symbol: sym, position: [...pos] })
-      }
-      for (const bond of bonds) {
-        const pi = atoms[bond.i].position, pj = atoms[bond.j].position
-        const dx = bond.end[0]-pi[0], dy = bond.end[1]-pi[1], dz = bond.end[2]-pi[2]
-        if (Math.abs(dx-(pj[0]-pi[0]))>0.01 || Math.abs(dy-(pj[1]-pi[1]))>0.01 || Math.abs(dz-(pj[2]-pi[2]))>0.01) {
-          addGhost(atoms[bond.j].symbol, bond.end)
-          const gI = [pj[0]-dx, pj[1]-dy, pj[2]-dz]
-          addGhost(atoms[bond.i].symbol, gI)
-          reverseBonds.push({
-            symStart: atoms[bond.j].symbol, symEnd: atoms[bond.i].symbol,
-            start: pj, mid: [(pj[0]+gI[0])*.5,(pj[1]+gI[1])*.5,(pj[2]+gI[2])*.5], end: gI,
-          })
+    for (let i = 0; i < atoms.length; i++) {
+      const atom = atoms[i]
+      const baseFrac = lattice && Linv ? cartToFrac(atom.position, Linv) : null
+      for (const shift of shifts) {
+        if (!lattice || !Linv) {
+          allAtoms.push({ symbol: atom.symbol, position: [...atom.position], sourceIndex: i })
+          break
         }
+        const shiftedFrac = [
+          baseFrac[0] + shift[0],
+          baseFrac[1] + shift[1],
+          baseFrac[2] + shift[2],
+        ]
+        if (!isInsideExpandedCell(shiftedFrac, margins)) continue
+        if (shift.some(Boolean) && isInsideCell(shiftedFrac)) continue
+
+        const offset = latticeShiftVector(lattice, shift)
+        const position = [
+          atom.position[0] + offset[0],
+          atom.position[1] + offset[1],
+          atom.position[2] + offset[2],
+        ]
+        const key = `${atom.symbol}:${position.map(v => Math.round(v * 1000)).join(',')}`
+        if (atomKeys.has(key)) continue
+        atomKeys.add(key)
+        allAtoms.push({ symbol: atom.symbol, position, sourceIndex: i })
       }
     }
 
-    const allAtoms = ghostAtoms.length ? [...atoms, ...ghostAtoms] : atoms
+    const displayBonds = mode.showBonds ? detectBonds(allAtoms, null, null) : []
+    const allSegs = displayBonds.map(bond => ({
+      symStart: allAtoms[bond.i].symbol,
+      symEnd: allAtoms[bond.j].symbol,
+      start: bond.start,
+      mid: bond.mid,
+      end: bond.end,
+    }))
 
     // Atoms
     const sphereGeo = new THREE.SphereGeometry(1, 36, 18)
@@ -473,7 +511,6 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     group.add(atomMesh)
 
     // Bonds
-    const allSegs = [...bonds, ...reverseBonds]
     if (mode.showBonds && allSegs.length) {
       const cylGeo  = new THREE.CylinderGeometry(1, 1, 1, 18, 1)
       const bondMat = makeBondMaterial()
