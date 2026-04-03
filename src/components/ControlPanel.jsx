@@ -8,6 +8,7 @@ export default function ControlPanel({
   displayMode, onDisplayMode,
   supercell,   onSupercell,
   cameraMode,  onCameraMode,
+  onViewAxis,
   onReset, onOpen,
   exportScale, onExportScale,
   onExport,
@@ -61,6 +62,21 @@ export default function ControlPanel({
               onClick={() => onCameraMode(m)}
               disabled={!hasStructure}
             >{m === 'perspective' ? 'Persp' : 'Ortho'}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="ctrl-divider" />
+
+      <div className="ctrl-group">
+        <span className="ctrl-label">Axes</span>
+        <div className="btn-group">
+          {['a', 'b', 'c'].map(axis => (
+            <button key={axis}
+              className="btn-mode"
+              onClick={() => onViewAxis(axis)}
+              disabled={!hasStructure}
+            >{axis}</button>
           ))}
         </div>
       </div>

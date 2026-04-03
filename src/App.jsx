@@ -13,7 +13,7 @@ export default function App() {
   const [supercell,     setSupercell]     = useState([1, 1, 1])
   const [customColors,  setCustomColors]  = useState({})
   const [exportScale,   setExportScale]   = useState(4)
-  const [cameraMode,    setCameraMode]    = useState('perspective')
+  const [cameraMode,    setCameraMode]    = useState('ortho')
   const [theme,         setTheme]         = useState('light')
   const [loading,       setLoading]       = useState(false)
   const [error,         setError]         = useState(null)
@@ -46,6 +46,7 @@ export default function App() {
   const handleExport = useCallback(() => viewerRef.current?.exportPNG(exportScale), [exportScale])
   const handleReset  = useCallback(() => viewerRef.current?.resetView(), [])
   const handleOpen   = useCallback(() => fileInputRef.current?.click(), [])
+  const handleViewAxis = useCallback((axis) => viewerRef.current?.viewAxis(axis), [])
 
   const onInputChange = useCallback((e) => {
     const f = e.target.files[0]
@@ -128,6 +129,7 @@ export default function App() {
         supercell={supercell}           onSupercell={setSupercell}
         exportScale={exportScale}       onExportScale={setExportScale}
         cameraMode={cameraMode}         onCameraMode={setCameraMode}
+        onViewAxis={handleViewAxis}
         onReset={handleReset}
         onOpen={handleOpen}
         onExport={handleExport}

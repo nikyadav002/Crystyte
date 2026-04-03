@@ -118,6 +118,35 @@ function frameCamera(camera, controls, center, radius) {
   return fitDist
 }
 
+function orientCamera(camera, controls, center, radius, direction) {
+  const c3 = new THREE.Vector3(...center)
+  const dir = new THREE.Vector3(...direction)
+  if (dir.lengthSq() < 1e-8) return
+  dir.normalize()
+
+  const halfFov = 45 * Math.PI / 360
+  const fitDist = (radius / Math.tan(halfFov)) * 1.35
+  camera.position.copy(c3).addScaledVector(dir, fitDist)
+  camera.lookAt(c3)
+  controls.target.copy(c3)
+
+  const far = fitDist * 10 + radius * 10
+  if (camera.isPerspectiveCamera) {
+    camera.near = Math.max(0.01, fitDist * 0.001)
+    camera.far  = far
+  } else {
+    const aspect = (camera.right - camera.left) / (camera.top - camera.bottom) || 1
+    const halfH  = radius * 1.35
+    camera.top = halfH
+    camera.bottom = -halfH
+    camera.right = halfH * aspect
+    camera.left = -halfH * aspect
+    camera.near = 0.01
+    camera.far = far
+  }
+  camera.updateProjectionMatrix()
+}
+
 // =============================================================================
 const CrystalViewer = forwardRef(function CrystalViewer(
   { structure, displayMode, supercell, customColors, cameraMode },
@@ -379,6 +408,9 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       }
       const cam = stateRef.current.activeCamera ?? stateRef.current.perspCam
       frameCamera(cam, controls, center, maxR)
+      stateRef.current.frameCenter = [...center]
+      stateRef.current.frameRadius = maxR
+      stateRef.current.frameLattice = lattice ? lattice.map(v => [...v]) : null
       stateRef.current.resetPos    = cam.position.clone()
       stateRef.current.resetTarget = controls.target.clone()
     }
@@ -393,6 +425,34 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       controls.target.copy(resetTarget)
       const was = controls.enableDamping
       controls.enableDamping = false; controls.update(); controls.enableDamping = was
+    },
+
+    viewAxis(axis) {
+      const { activeCamera, perspCam, controls, frameCenter, frameRadius, frameLattice } = stateRef.current
+      if (!activeCamera || !perspCam || !controls || !frameCenter || !frameRadius) return
+
+      const axisIndex = { a: 0, b: 1, c: 2 }[axis]
+      const fallback = {
+        a: [1, 0, 0],
+        b: [0, 1, 0],
+        c: [0, 0, 1],
+      }
+      const direction = axisIndex != null && frameLattice?.[axisIndex]
+        ? frameLattice[axisIndex]
+        : fallback[axis]
+      if (!direction) return
+
+      orientCamera(perspCam, controls, frameCenter, frameRadius, direction)
+      if (activeCamera !== perspCam) {
+        orientCamera(activeCamera, controls, frameCenter, frameRadius, direction)
+      }
+
+      stateRef.current.resetPos = activeCamera.position.clone()
+      stateRef.current.resetTarget = controls.target.clone()
+      const was = controls.enableDamping
+      controls.enableDamping = false
+      controls.update()
+      controls.enableDamping = was
     },
 
     exportPNG(scale = 1) {
