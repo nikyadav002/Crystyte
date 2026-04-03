@@ -704,7 +704,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       renderer.render(scene, activeCamera)
 
       const a = document.createElement('a')
-      a.href = url; a.download = `crystyte_${s}x_transparent_600dpi.png`; a.click()
+      a.href = url; a.download = 'crystyte_crystal.png'; a.click()
     },
   }), [])
 
