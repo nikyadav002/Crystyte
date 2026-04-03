@@ -1,5 +1,6 @@
 import { getElement } from './elements.js'
 import { mat3Inv, fracToCart, cartToFrac, micFrac, getLatticeParams, centroid } from './math.js'
+import { getBondRule } from './bondingLogic.js'
 
 // ---- Formula ----------------------------------------------------------------
 
@@ -126,7 +127,10 @@ export function detectBonds(atoms, lattice, Linv) {
     for (let j = i + 1; j < atoms.length; j++) {
       const rj = atoms[j].position
       const rj_sym = atoms[j].symbol
-      const maxBond = (ri_rad + getElement(rj_sym).radius) * BOND_SCALE
+      const defaultMaxBond = (ri_rad + getElement(rj_sym).radius) * BOND_SCALE
+      const rule = getBondRule(ri_sym, rj_sym)
+      const minBond = Math.max(MIN_BOND, rule?.min ?? 0)
+      const maxBond = rule?.max ?? defaultMaxBond
 
       let dx = rj[0] - ri[0]
       let dy = rj[1] - ri[1]
@@ -145,7 +149,7 @@ export function detectBonds(atoms, lattice, Linv) {
       }
 
       const dist = Math.hypot(dx, dy, dz)
-      if (dist < MIN_BOND || dist > maxBond) continue
+      if (dist < minBond || dist > maxBond) continue
 
       bonds.push({
         i, j,
