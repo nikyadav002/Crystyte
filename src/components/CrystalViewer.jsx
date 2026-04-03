@@ -5,20 +5,19 @@ import { getElement } from '../lib/elements.js'
 import { expandSupercell, detectBonds, cellBoxLines } from '../lib/structure.js'
 
 const MODES = {
-  'ball-stick': { atomFactor: 0.35, bondRadius: 0.13, showBonds: true,  showAtoms: true  },
-  'spacefill':  { atomFactor: 1.0,  bondRadius: 0.13, showBonds: false, showAtoms: true, vdw: true },
-  'stick':      { atomFactor: 0.12, bondRadius: 0.18, showBonds: true,  showAtoms: true  },
+  'ball-stick': { atomFactor: 0.35, bondRadius: 0.10, showBonds: true,  showAtoms: true  },
+  'spacefill':  { atomFactor: 1.0,  bondRadius: 0.10, showBonds: false, showAtoms: true, vdw: true },
+  'stick':      { atomFactor: 0.12, bondRadius: 0.15, showBonds: true,  showAtoms: true  },
 }
 
-const BG = new THREE.Color(0xffffff)  // white background always — same as VESTA
+const BG      = new THREE.Color(0x0f1117)   // dark background (matches reference)
+const EXPORT_BG = new THREE.Color(0xffffff) // white for publication exports
 
-// MeshPhongMaterial: per-pixel Phong shading gives the classic VESTA ball appearance.
-// shininess=100 → tight specular spot; dim specular so atom color dominates.
-function makeMaterial() {
-  return new THREE.MeshPhongMaterial({
-    shininess: 100,
-    specular:  new THREE.Color(0.22, 0.22, 0.22),
-  })
+function makeAtomMaterial()  {
+  return new THREE.MeshPhongMaterial({ shininess: 70, specular: 0x222222 })
+}
+function makeBondMaterial()  {
+  return new THREE.MeshPhongMaterial({ shininess: 30 })
 }
 
 // ---- PNG DPI injection -------------------------------------------------------
@@ -49,7 +48,11 @@ function injectDPI(dataURL, dpi) {
   // insert after PNG sig (8) + IHDR (25) = offset 33
   const out = new Uint8Array(src.length + 21)
   out.set(src.slice(0, 33)); out.set(phys, 33); out.set(src.slice(33), 54)
-  return 'data:image/png;base64,' + btoa(String.fromCharCode(...out))
+  // Chunked to avoid stack overflow on large (multi-MB) PNG arrays
+  let b64 = ''
+  for (let i = 0; i < out.length; i += 8192)
+    b64 += String.fromCharCode.apply(null, out.subarray(i, i + 8192))
+  return 'data:image/png;base64,' + btoa(b64)
 }
 
 // ---- Geometry ---------------------------------------------------------------
@@ -98,11 +101,6 @@ function frameCamera(camera, controls, center, radius, scene) {
   controls.update()
   controls.enableDamping = was
 
-  // Depth-cue fog: gentle — front atoms fully clear, back atoms ~25% faded
-  if (scene) {
-    scene.fog = new THREE.Fog(BG.getHex(), fitDist * 0.9, fitDist * 2.2 + radius * 2)
-  }
-
   return fitDist
 }
 
@@ -136,15 +134,14 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     const perspCam = new THREE.PerspectiveCamera(45, el.clientWidth / el.clientHeight, 0.01, 2000)
     perspCam.position.set(15, 12, 20)
 
-    // VESTA-style lighting:
-    //   - HemisphereLight (sky=white, ground=mid-gray) ensures all atom faces show
-    //     their CPK color; nothing ever goes pitch-black.
-    //   - One directional key light from top-left creates the specular highlight
-    //     that makes atoms look like glossy spheres.
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xaaaaaa, 0.65))
-    const key = new THREE.DirectionalLight(0xffffff, 0.85)
-    key.position.set(-3, 8, 5)
-    scene.add(key)
+    // Exact 3-light setup from reference (cdfm-iitd.github.io)
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5))
+    const dl1 = new THREE.DirectionalLight(0xffffff, 0.9)
+    dl1.position.set(50, 60, 40)
+    scene.add(dl1)
+    const dl2 = new THREE.DirectionalLight(0xbbd4ff, 0.35)
+    dl2.position.set(-40, -20, -50)
+    scene.add(dl2)
 
     const controls = new OrbitControls(perspCam, renderer.domElement)
     controls.enableDamping  = true
@@ -260,7 +257,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
 
     // Atoms
     const sphereGeo = new THREE.SphereGeometry(1, 36, 18)
-    const atomMat   = makeMaterial()
+    const atomMat   = makeAtomMaterial()
     const atomMesh  = new THREE.InstancedMesh(sphereGeo, atomMat, allAtoms.length)
     atomMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
 
@@ -287,7 +284,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     const allSegs = [...bonds, ...reverseBonds]
     if (mode.showBonds && allSegs.length) {
       const cylGeo  = new THREE.CylinderGeometry(1, 1, 1, 18, 1)
-      const bondMat = makeMaterial()
+      const bondMat = makeBondMaterial()
       const mesh    = new THREE.InstancedMesh(cylGeo, bondMat, allSegs.length * 2)
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
       let idx = 0
@@ -356,21 +353,22 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       const dpr  = renderer.getPixelRatio()
       const cssW = renderer.domElement.width  / dpr
       const cssH = renderer.domElement.height / dpr
-      const s    = Math.max(scale, Math.ceil(3600 / cssW))  // ≥3600 px → ≥6 in @ 600 DPI
+      const s    = Math.max(scale, Math.ceil(3600 / cssW))
 
-      // background is already white; fog is already white → no state change needed
+      // White background for publication export
+      scene.background = EXPORT_BG.clone()
       renderer.setPixelRatio(1)
       renderer.setSize(cssW * s, cssH * s, false)
-
       if (activeCamera.isOrthographicCamera) {
         activeCamera.right = activeCamera.top * (cssW/cssH)
         activeCamera.left  = -activeCamera.right
         activeCamera.updateProjectionMatrix()
       }
-
       renderer.render(scene, activeCamera)
       const url = injectDPI(renderer.domElement.toDataURL('image/png'), 600)
 
+      // Restore dark background
+      scene.background = BG.clone()
       renderer.setPixelRatio(dpr)
       renderer.setSize(cssW, cssH, false)
       if (activeCamera.isOrthographicCamera) {
