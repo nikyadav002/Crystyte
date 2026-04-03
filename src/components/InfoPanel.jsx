@@ -28,14 +28,6 @@ export default function InfoPanel({ structure, customColors, onColorChange }) {
   return (
     <aside className="info-panel">
       <section className="info-section">
-        <h3 className="info-heading">Formula</h3>
-        <p className="info-formula">{structure.formula || '—'}</p>
-        {structure.title && (
-          <p className="info-title" title={structure.title}>{structure.title}</p>
-        )}
-      </section>
-
-      <section className="info-section">
         <h3 className="info-heading">Structure</h3>
         <dl className="info-dl">
           <dt>Space group</dt>

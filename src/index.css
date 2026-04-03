@@ -183,15 +183,6 @@ button { cursor: pointer; }
   font-size: 10px; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.8px; color: var(--text-dim); margin-bottom: 6px;
 }
-.info-formula {
-  font-size: 18px; font-weight: 600; color: var(--text-bright);
-  letter-spacing: 0.2px; font-family: 'Georgia', serif;
-}
-.info-title {
-  font-size: 11px; color: var(--text-dim); margin-top: 3px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
 .info-dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px; }
 .info-dl.info-dl--grid { grid-template-columns: 1fr 1fr 1fr; }
 .info-dl dt { color: var(--text-dim); }
