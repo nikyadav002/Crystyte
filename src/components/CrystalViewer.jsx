@@ -17,6 +17,9 @@ const LIGHT_PROFILES = {
   view:   { ambient: 0.48, hemi: 0.24, key: 0.52, fill: 0.14 },
   export: { ambient: 0.34, hemi: 0.12, key: 0.46, fill: 0.12 },
 }
+const CELL_EDGE_COLOR = 0x000000
+const AXIS_COLORS = { a: '#d35d5d', b: '#5ea96e', c: '#5d7bd6' }
+const AXIS_OVERLAY_SIZE = 116
 
 function makeAtomMaterial()  {
   return new THREE.MeshLambertMaterial()
@@ -82,6 +85,81 @@ function cylinderMatrix(start, end, radius) {
     q, new THREE.Vector3(radius, len, radius),
   )
   return m
+}
+
+function makeLabelSprite(text, color) {
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  ctx.clearRect(0, 0, size, size)
+  ctx.fillStyle = color
+  ctx.font = '700 64px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(text, size / 2, size / 2)
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.needsUpdate = true
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  })
+  const sprite = new THREE.Sprite(material)
+  sprite.scale.set(0.7, 0.7, 0.7)
+  sprite.renderOrder = 10
+  return sprite
+}
+
+function maxLatticeLength(lattice) {
+  if (!lattice?.length) return 1
+  return lattice.reduce((maxLen, v) => Math.max(maxLen, Math.hypot(v[0], v[1], v[2])), 1)
+}
+
+function disposeObjectMaterials(object) {
+  object.traverse(o => {
+    o.geometry?.dispose()
+    if (Array.isArray(o.material)) {
+      o.material.forEach(m => { m.map?.dispose?.(); m.dispose?.() })
+    } else if (o.material) {
+      o.material.map?.dispose?.()
+      o.material.dispose?.()
+    }
+  })
+}
+
+function rebuildAxisOverlay(group, lattice) {
+  while (group.children.length) {
+    const child = group.children.pop()
+    disposeObjectMaterials(child)
+  }
+  if (!lattice) {
+    group.visible = false
+    return
+  }
+
+  group.visible = true
+  const origin = new THREE.Vector3(0, 0, 0)
+  ;[['a', lattice[0]], ['b', lattice[1]], ['c', lattice[2]]].forEach(([label, vector]) => {
+    const dir = new THREE.Vector3(...vector)
+    if (dir.lengthSq() < 1e-8) return
+    dir.normalize()
+
+    const arrow = new THREE.ArrowHelper(dir, origin, 1.25, AXIS_COLORS[label], 0.28, 0.16)
+    group.add(arrow)
+
+    const labelSprite = makeLabelSprite(label, AXIS_COLORS[label])
+    if (labelSprite) {
+      labelSprite.scale.set(0.44, 0.44, 0.44)
+      labelSprite.position.copy(dir.multiplyScalar(1.62))
+      group.add(labelSprite)
+    }
+  })
 }
 
 // ---- Camera + depth-cue fog -------------------------------------------------
@@ -170,10 +248,19 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     renderer.setSize(el.clientWidth, el.clientHeight)
     renderer.outputEncoding = THREE.sRGBEncoding
     renderer.toneMapping = THREE.NoToneMapping
+    renderer.autoClear = false
     el.appendChild(renderer.domElement)
 
     const scene = new THREE.Scene()
     scene.background = BG.clone()
+
+    const axisOverlayScene = new THREE.Scene()
+    const axisOverlayCamera = new THREE.OrthographicCamera(-2, 2, 2, -2, 0.1, 10)
+    axisOverlayCamera.position.set(0, 0, 5)
+    axisOverlayCamera.lookAt(0, 0, 0)
+    const axisOverlayGroup = new THREE.Group()
+    axisOverlayGroup.visible = false
+    axisOverlayScene.add(axisOverlayGroup)
 
     const perspCam = new THREE.PerspectiveCamera(45, el.clientWidth / el.clientHeight, 0.01, 2000)
     perspCam.position.set(15, 12, 20)
@@ -221,7 +308,22 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       const activeCamera = stateRef.current.activeCamera ?? perspCam
       lightRigRoot.position.copy(activeCamera.position)
       lightRigRoot.quaternion.copy(activeCamera.quaternion)
+      axisOverlayGroup.quaternion.copy(activeCamera.quaternion).invert()
+      const width = el.clientWidth
+      const height = el.clientHeight
+      const overlaySize = Math.min(AXIS_OVERLAY_SIZE, Math.max(72, Math.floor(Math.min(width, height) * 0.18)))
+
+      renderer.clear()
       renderer.render(scene, activeCamera)
+      if (axisOverlayGroup.visible && width > 0 && height > 0) {
+        renderer.clearDepth()
+        renderer.setScissorTest(true)
+        renderer.setViewport(width - overlaySize - 12, 12, overlaySize, overlaySize)
+        renderer.setScissor(width - overlaySize - 12, 12, overlaySize, overlaySize)
+        renderer.render(axisOverlayScene, axisOverlayCamera)
+        renderer.setScissorTest(false)
+        renderer.setViewport(0, 0, width, height)
+      }
     }
     animate()
 
@@ -249,12 +351,14 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       animId,
       ro,
       lightRig,
+      axisOverlayGroup,
     }
 
     return () => {
       cancelAnimationFrame(animId)
       ro.disconnect()
       controls.dispose()
+      disposeObjectMaterials(axisOverlayGroup)
       renderer.dispose()
       if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement)
     }
@@ -289,15 +393,24 @@ const CrystalViewer = forwardRef(function CrystalViewer(
 
   // ---- Rebuild geometry ---------------------------------------------------
   useEffect(() => {
-    const { scene, controls } = stateRef.current
+    const { scene, controls, axisOverlayGroup } = stateRef.current
     if (!scene) return
 
     const old = scene.getObjectByName('structureGroup')
-    if (old) { old.traverse(o => { o.geometry?.dispose(); o.material?.dispose() }); scene.remove(old) }
+    if (old) {
+      disposeObjectMaterials(old)
+      scene.remove(old)
+    }
 
-    if (!structure?.atoms?.length) return
+    if (!structure?.atoms?.length) {
+      rebuildAxisOverlay(axisOverlayGroup, null)
+      return
+    }
     const expanded = expandSupercell(structure, supercell)
-    if (!expanded) return
+    if (!expanded) {
+      rebuildAxisOverlay(axisOverlayGroup, null)
+      return
+    }
 
     const { atoms, lattice, Linv } = expanded
     const mode  = MODES[displayMode] ?? MODES['ball-stick']
@@ -386,11 +499,27 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     if (lattice) {
       const pts = cellBoxLines(lattice)
       if (pts) {
-        const geo = new THREE.BufferGeometry()
-        geo.setAttribute('position', new THREE.BufferAttribute(pts, 3))
-        group.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x444444 })))
+        const edgeRadius = Math.max(0.018, maxLatticeLength(lattice) * 0.0032)
+        const edgeGeo = new THREE.CylinderGeometry(1, 1, 1, 12, 1)
+        const edgeMat = new THREE.MeshLambertMaterial({ color: CELL_EDGE_COLOR })
+        const edgeMesh = new THREE.InstancedMesh(edgeGeo, edgeMat, pts.length / 6)
+        edgeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+
+        let edgeIdx = 0
+        for (let i = 0; i < pts.length; i += 6) {
+          const start = [pts[i], pts[i + 1], pts[i + 2]]
+          const end = [pts[i + 3], pts[i + 4], pts[i + 5]]
+          const m = cylinderMatrix(start, end, edgeRadius)
+          if (!m) continue
+          edgeMesh.setMatrixAt(edgeIdx++, m)
+        }
+        edgeMesh.count = edgeIdx
+        edgeMesh.instanceMatrix.needsUpdate = true
+        group.add(edgeMesh)
       }
     }
+
+    rebuildAxisOverlay(axisOverlayGroup, lattice)
 
     scene.add(group)
 
@@ -478,6 +607,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
         activeCamera.left  = -activeCamera.right
         activeCamera.updateProjectionMatrix()
       }
+      renderer.clear()
       renderer.render(scene, activeCamera)
       const url = injectDPI(renderer.domElement.toDataURL('image/png'), 600)
 
@@ -494,6 +624,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
         activeCamera.left  = -activeCamera.right
         activeCamera.updateProjectionMatrix()
       }
+      renderer.clear()
       renderer.render(scene, activeCamera)
 
       const a = document.createElement('a')
