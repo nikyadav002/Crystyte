@@ -98,9 +98,9 @@ function frameCamera(camera, controls, center, radius, scene) {
   controls.update()
   controls.enableDamping = was
 
-  // Depth-cue fog: front atoms clear, back atoms fade to white (like VESTA)
+  // Depth-cue fog: gentle — front atoms fully clear, back atoms ~25% faded
   if (scene) {
-    scene.fog = new THREE.Fog(BG.getHex(), fitDist * 0.45, fitDist + radius * 3.5)
+    scene.fog = new THREE.Fog(BG.getHex(), fitDist * 0.9, fitDist * 2.2 + radius * 2)
   }
 
   return fitDist
@@ -141,8 +141,8 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     //     their CPK color; nothing ever goes pitch-black.
     //   - One directional key light from top-left creates the specular highlight
     //     that makes atoms look like glossy spheres.
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 0.6))
-    const key = new THREE.DirectionalLight(0xffffff, 0.9)
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xaaaaaa, 0.65))
+    const key = new THREE.DirectionalLight(0xffffff, 0.85)
     key.position.set(-3, 8, 5)
     scene.add(key)
 

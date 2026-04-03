@@ -1,7 +1,7 @@
 // CPK colors and covalent / van-der-Waals radii (Å)
 // Colors from Jmol/CPK convention; radii from Alvarez 2008 + CCDC
 export const ELEMENTS = {
-  H:  { name:'Hydrogen',     color:'#FFFFFF', radius:0.31, vdw:1.20 },
+  H:  { name:'Hydrogen',     color:'#C8C8C8', radius:0.31, vdw:1.20 },
   He: { name:'Helium',       color:'#D9FFFF', radius:0.28, vdw:1.40 },
   Li: { name:'Lithium',      color:'#CC80FF', radius:1.28, vdw:1.82 },
   Be: { name:'Beryllium',    color:'#C2FF00', radius:0.96, vdw:1.53 },
