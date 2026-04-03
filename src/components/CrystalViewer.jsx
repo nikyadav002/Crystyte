@@ -19,7 +19,7 @@ const LIGHT_PROFILES = {
 }
 const CELL_EDGE_COLOR = 0x000000
 const AXIS_COLORS = { a: '#d35d5d', b: '#5ea96e', c: '#5d7bd6' }
-const AXIS_OVERLAY_SIZE = 116
+const AXIS_OVERLAY_SIZE = 164
 
 function makeAtomMaterial()  {
   return new THREE.MeshLambertMaterial()
@@ -150,13 +150,13 @@ function rebuildAxisOverlay(group, lattice) {
     if (dir.lengthSq() < 1e-8) return
     dir.normalize()
 
-    const arrow = new THREE.ArrowHelper(dir, origin, 1.25, AXIS_COLORS[label], 0.28, 0.16)
+    const arrow = new THREE.ArrowHelper(dir, origin, 1.72, AXIS_COLORS[label], 0.42, 0.25)
     group.add(arrow)
 
     const labelSprite = makeLabelSprite(label, AXIS_COLORS[label])
     if (labelSprite) {
-      labelSprite.scale.set(0.44, 0.44, 0.44)
-      labelSprite.position.copy(dir.multiplyScalar(1.62))
+      labelSprite.scale.set(0.68, 0.68, 0.68)
+      labelSprite.position.copy(dir.multiplyScalar(2.22))
       group.add(labelSprite)
     }
   })
@@ -311,7 +311,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       axisOverlayGroup.quaternion.copy(activeCamera.quaternion).invert()
       const width = el.clientWidth
       const height = el.clientHeight
-      const overlaySize = Math.min(AXIS_OVERLAY_SIZE, Math.max(72, Math.floor(Math.min(width, height) * 0.18)))
+      const overlaySize = Math.min(AXIS_OVERLAY_SIZE, Math.max(92, Math.floor(Math.min(width, height) * 0.23)))
 
       renderer.clear()
       renderer.render(scene, activeCamera)
@@ -499,7 +499,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     if (lattice) {
       const pts = cellBoxLines(lattice)
       if (pts) {
-        const edgeRadius = Math.max(0.018, maxLatticeLength(lattice) * 0.0032)
+        const edgeRadius = Math.max(0.013, maxLatticeLength(lattice) * 0.0023)
         const edgeGeo = new THREE.CylinderGeometry(1, 1, 1, 12, 1)
         const edgeMat = new THREE.MeshLambertMaterial({ color: CELL_EDGE_COLOR })
         const edgeMesh = new THREE.InstancedMesh(edgeGeo, edgeMat, pts.length / 6)
