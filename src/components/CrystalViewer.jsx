@@ -143,6 +143,22 @@ function isInsideCell(frac) {
   return frac.every(value => value >= -1e-6 && value <= 1 + 1e-6)
 }
 
+function isBoundaryRepeat(baseFrac, shiftedFrac, shift) {
+  let repeatsBoundary = false
+  for (let axis = 0; axis < 3; axis++) {
+    if (shift[axis] === 0) continue
+    repeatsBoundary = true
+    if (shift[axis] === 1) {
+      if (!(Math.abs(baseFrac[axis]) <= 1e-6 && Math.abs(shiftedFrac[axis] - 1) <= 1e-6)) return false
+    } else if (shift[axis] === -1) {
+      if (!(Math.abs(baseFrac[axis] - 1) <= 1e-6 && Math.abs(shiftedFrac[axis]) <= 1e-6)) return false
+    } else {
+      return false
+    }
+  }
+  return repeatsBoundary
+}
+
 function disposeObjectMaterials(object) {
   object.traverse(o => {
     o.geometry?.dispose()
@@ -466,7 +482,8 @@ const CrystalViewer = forwardRef(function CrystalViewer(
           baseFrac[2] + shift[2],
         ]
         if (!isInsideExpandedCell(shiftedFrac, margins)) continue
-        if (shift.some(Boolean) && isInsideCell(shiftedFrac)) continue
+        const boundaryRepeat = shift.some(Boolean) && isBoundaryRepeat(baseFrac, shiftedFrac, shift)
+        if (shift.some(Boolean) && isInsideCell(shiftedFrac) && !boundaryRepeat) continue
 
         const offset = latticeShiftVector(lattice, shift)
         const position = [
@@ -481,7 +498,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
           symbol: atom.symbol,
           position,
           sourceIndex: i,
-          inside: isInsideCell(shiftedFrac),
+          inside: isInsideCell(shiftedFrac) && !boundaryRepeat,
         })
       }
     }
