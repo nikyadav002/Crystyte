@@ -128,7 +128,9 @@ export function detectBonds(atoms, lattice, Linv, bondOverrides = {}) {
       const rj = atoms[j].position
       const rj_sym = atoms[j].symbol
       const defaultMaxBond = (ri_rad + getElement(rj_sym).radius) * BOND_SCALE
-      const rule = bondOverrides[getBondRuleKey(ri_sym, rj_sym)] ?? getBondRule(ri_sym, rj_sym)
+      const override = bondOverrides[getBondRuleKey(ri_sym, rj_sym)]
+      if (override?.enabled === false) continue
+      const rule = override ?? getBondRule(ri_sym, rj_sym)
       const minBond = Math.max(MIN_BOND, rule?.min ?? 0)
       const maxBond = rule?.max ?? defaultMaxBond
 

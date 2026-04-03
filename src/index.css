@@ -220,6 +220,14 @@ button { cursor: pointer; }
 .swatch-count { font-size: 11px; color: var(--text-dim); }
 
 .bond-criteria { display: flex; flex-direction: column; gap: 8px; }
+.bond-criteria-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+}
 .bond-criteria-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .bond-criteria-field { display: flex; flex-direction: column; gap: 4px; }
 .bond-criteria-field span { font-size: 11px; color: var(--text-dim); }
@@ -234,7 +242,7 @@ button { cursor: pointer; }
   color: var(--text-bright);
   font-size: 12px;
 }
-.bond-criteria-actions { display: flex; justify-content: flex-end; }
+.bond-criteria-actions { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
 .btn-inline { padding: 4px 10px; font-size: 11px; }
 
 /* ---- Control panel (bottom bar) ---- */

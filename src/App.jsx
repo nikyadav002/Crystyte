@@ -16,6 +16,17 @@ const DISPLAY_MODES = [
   { id: 'stick',      label: 'Stick'        },
 ]
 
+function getFallbackBondRule(symA, symB) {
+  return {
+    min: MIN_BOND,
+    max: (getElement(symA).radius + getElement(symB).radius) * BOND_SCALE,
+  }
+}
+
+function getBaseBondRule(symA, symB) {
+  return getBondRule(symA, symB) ?? getFallbackBondRule(symA, symB)
+}
+
 export default function App() {
   const [structure,     setStructure]     = useState(null)
   const [displayMode,   setDisplayMode]   = useState('ball-stick')
@@ -81,15 +92,43 @@ export default function App() {
     const nextValue = Number.isFinite(parsed) ? parsed : 0
     const key = getBondRuleKey(effectiveBondPair[0], effectiveBondPair[1])
     setBondOverrides(prev => {
-      const base = prev[key] ?? getBondRule(effectiveBondPair[0], effectiveBondPair[1]) ?? {
-        min: MIN_BOND,
-        max: (getElement(effectiveBondPair[0]).radius + getElement(effectiveBondPair[1]).radius) * BOND_SCALE,
-      }
+      const base = prev[key] ?? getBaseBondRule(effectiveBondPair[0], effectiveBondPair[1])
       return {
         ...prev,
         [key]: {
+          enabled: true,
           min: field === 'min' ? nextValue : base.min,
           max: field === 'max' ? nextValue : base.max,
+        },
+      }
+    })
+  }, [effectiveBondPair])
+
+  const handleBondRuleCreate = useCallback(() => {
+    const key = getBondRuleKey(effectiveBondPair[0], effectiveBondPair[1])
+    setBondOverrides(prev => {
+      const base = prev[key] ?? getBaseBondRule(effectiveBondPair[0], effectiveBondPair[1])
+      return {
+        ...prev,
+        [key]: {
+          min: base.min,
+          max: base.max,
+          enabled: true,
+        },
+      }
+    })
+  }, [effectiveBondPair])
+
+  const handleBondRuleDelete = useCallback(() => {
+    const key = getBondRuleKey(effectiveBondPair[0], effectiveBondPair[1])
+    setBondOverrides(prev => {
+      const base = prev[key] ?? getBaseBondRule(effectiveBondPair[0], effectiveBondPair[1])
+      return {
+        ...prev,
+        [key]: {
+          min: base.min,
+          max: base.max,
+          enabled: false,
         },
       }
     })
@@ -110,9 +149,14 @@ export default function App() {
   const handleOpen   = useCallback(() => fileInputRef.current?.click(), [])
   const handleViewAxis = useCallback((axis) => viewerRef.current?.viewAxis(axis), [])
 
+  const activeBondKey = getBondRuleKey(effectiveBondPair[0], effectiveBondPair[1])
+  const activeBondOverride = activeBondKey ? bondOverrides[activeBondKey] : null
   const activeBondRule = effectiveBondPair[0] && effectiveBondPair[1]
-    ? bondOverrides[getBondRuleKey(effectiveBondPair[0], effectiveBondPair[1])] ?? getBondRule(effectiveBondPair[0], effectiveBondPair[1])
+    ? activeBondOverride ?? getBondRule(effectiveBondPair[0], effectiveBondPair[1]) ?? getFallbackBondRule(effectiveBondPair[0], effectiveBondPair[1])
     : null
+  const activeBondState = activeBondOverride
+    ? (activeBondOverride.enabled === false ? 'disabled' : 'custom')
+    : (getBondRule(effectiveBondPair[0], effectiveBondPair[1]) ? 'default' : 'fallback')
 
   const onInputChange = useCallback((e) => {
     const f = e.target.files[0]
@@ -208,7 +252,10 @@ export default function App() {
           bondPair={effectiveBondPair}
           onBondPairChange={handleBondPairChange}
           bondRule={activeBondRule}
+          bondRuleState={activeBondState}
           onBondRuleChange={handleBondRuleChange}
+          onBondRuleCreate={handleBondRuleCreate}
+          onBondRuleDelete={handleBondRuleDelete}
           onBondRuleReset={handleBondRuleReset}
         />
       </div>

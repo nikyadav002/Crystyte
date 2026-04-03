@@ -10,7 +10,10 @@ export default function InfoPanel({
   bondPair,
   onBondPairChange,
   bondRule,
+  bondRuleState,
   onBondRuleChange,
+  onBondRuleCreate,
+  onBondRuleDelete,
   onBondRuleReset,
 }) {
   const fmt = (n, d = 4) => (typeof n === 'number' ? n.toFixed(d) : '—')
@@ -35,6 +38,12 @@ export default function InfoPanel({
     max: (getElement(activePair[0]).radius + getElement(activePair[1]).radius) * BOND_SCALE,
   }
   const activeBondRule = bondRule ?? baseBondRule
+  const bondStateLabel = {
+    custom: 'Custom bond',
+    disabled: 'Bond hidden',
+    default: 'Default bond',
+    fallback: 'Radius fallback',
+  }[bondRuleState ?? 'default']
 
   if (!structure) {
     return (
@@ -103,6 +112,7 @@ export default function InfoPanel({
         <section className="info-section">
           <h3 className="info-heading">Bond Criteria</h3>
           <div className="bond-criteria">
+            <div className="bond-criteria-status">{bondStateLabel}</div>
             <div className="bond-criteria-row">
               <label className="bond-criteria-field">
                 <span>A1</span>
@@ -146,6 +156,12 @@ export default function InfoPanel({
               </label>
             </div>
             <div className="bond-criteria-actions">
+              <button className="btn-icon btn-inline" onClick={onBondRuleCreate} type="button">
+                Create Bond
+              </button>
+              <button className="btn-icon btn-inline" onClick={onBondRuleDelete} type="button">
+                Delete Bond
+              </button>
               <button className="btn-icon btn-inline" onClick={onBondRuleReset} type="button">
                 Use Default
               </button>
