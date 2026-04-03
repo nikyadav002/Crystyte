@@ -11,7 +11,7 @@ const MODES = {
 }
 
 const BG      = new THREE.Color(0x0f1117)   // dark background (matches reference)
-const EXPORT_BG = new THREE.Color(0xffffff) // white for publication exports
+const EXPORT_MIN_EDGE = 6000
 
 const LIGHT_PROFILES = {
   view:   { ambient: 0.48, hemi: 0.24, key: 0.52, fill: 0.14 },
@@ -134,7 +134,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
-      alpha: false,
+      alpha: true,
       preserveDrawingBuffer: true,
     })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -402,13 +402,15 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       const dpr  = renderer.getPixelRatio()
       const cssW = renderer.domElement.width  / dpr
       const cssH = renderer.domElement.height / dpr
-      const s    = Math.max(scale, Math.ceil(3600 / cssW))
+      const longestEdge = Math.max(cssW, cssH)
+      const s    = Math.max(scale, Math.ceil(EXPORT_MIN_EDGE / longestEdge))
 
-      // White background for publication export
-      scene.background = EXPORT_BG.clone()
+      // Transparent publication export.
+      scene.background = null
       applyLightProfile(lightRig, 'export')
       lightRig.root.position.copy(activeCamera.position)
       lightRig.root.quaternion.copy(activeCamera.quaternion)
+      renderer.setClearColor(0x000000, 0)
       renderer.setPixelRatio(1)
       renderer.setSize(cssW * s, cssH * s, false)
       if (activeCamera.isOrthographicCamera) {
@@ -424,6 +426,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       applyLightProfile(lightRig, 'view')
       lightRig.root.position.copy(activeCamera.position)
       lightRig.root.quaternion.copy(activeCamera.quaternion)
+      renderer.setClearColor(0x000000, 1)
       renderer.setPixelRatio(dpr)
       renderer.setSize(cssW, cssH, false)
       if (activeCamera.isOrthographicCamera) {
@@ -434,7 +437,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       renderer.render(scene, activeCamera)
 
       const a = document.createElement('a')
-      a.href = url; a.download = `crystyte_${s}x_600dpi.png`; a.click()
+      a.href = url; a.download = `crystyte_${s}x_transparent_600dpi.png`; a.click()
     },
   }), [])
 

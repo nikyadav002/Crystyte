@@ -96,7 +96,7 @@ export default function ControlPanel({
         <span className="ctrl-label">Export PNG</span>
         <div className="export-row">
           <div className="btn-group">
-            {[1, 2, 4].map(v => (
+            {[1, 2, 4, 6].map(v => (
               <button key={v}
                 className={`btn-scale${exportScale === v ? ' active' : ''}`}
                 onClick={() => onExportScale(v)}

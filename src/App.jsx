@@ -12,7 +12,7 @@ export default function App() {
   const [displayMode,   setDisplayMode]   = useState('ball-stick')
   const [supercell,     setSupercell]     = useState([1, 1, 1])
   const [customColors,  setCustomColors]  = useState({})
-  const [exportScale,   setExportScale]   = useState(2)
+  const [exportScale,   setExportScale]   = useState(4)
   const [cameraMode,    setCameraMode]    = useState('perspective')
   const [theme,         setTheme]         = useState('light')
   const [loading,       setLoading]       = useState(false)
