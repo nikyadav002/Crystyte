@@ -10,7 +10,7 @@ const MODES = {
   'stick':      { atomFactor: 0.12, bondRadius: 0.15, showBonds: true,  showAtoms: true  },
 }
 
-const BG      = new THREE.Color(0x0f1117)   // dark background (matches reference)
+const BG      = new THREE.Color(0xf1f3f6)
 const EXPORT_MIN_EDGE = 6000
 
 const LIGHT_PROFILES = {
@@ -255,7 +255,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     scene.background = BG.clone()
 
     const axisOverlayScene = new THREE.Scene()
-    const axisOverlayCamera = new THREE.OrthographicCamera(-2, 2, 2, -2, 0.1, 10)
+    const axisOverlayCamera = new THREE.OrthographicCamera(-2.8, 2.8, 2.8, -2.8, 0.1, 10)
     axisOverlayCamera.position.set(0, 0, 5)
     axisOverlayCamera.lookAt(0, 0, 0)
     const axisOverlayGroup = new THREE.Group()
@@ -311,15 +311,16 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       axisOverlayGroup.quaternion.copy(activeCamera.quaternion).invert()
       const width = el.clientWidth
       const height = el.clientHeight
-      const overlaySize = Math.min(AXIS_OVERLAY_SIZE, Math.max(92, Math.floor(Math.min(width, height) * 0.23)))
+      const overlaySize = Math.min(AXIS_OVERLAY_SIZE, Math.max(96, Math.floor(Math.min(width, height) * 0.23)))
+      const overlayMargin = Math.max(16, Math.floor(overlaySize * 0.12))
 
       renderer.clear()
       renderer.render(scene, activeCamera)
       if (axisOverlayGroup.visible && width > 0 && height > 0) {
         renderer.clearDepth()
         renderer.setScissorTest(true)
-        renderer.setViewport(width - overlaySize - 12, 12, overlaySize, overlaySize)
-        renderer.setScissor(width - overlaySize - 12, 12, overlaySize, overlaySize)
+        renderer.setViewport(width - overlaySize - overlayMargin, overlayMargin, overlaySize, overlaySize)
+        renderer.setScissor(width - overlaySize - overlayMargin, overlayMargin, overlaySize, overlaySize)
         renderer.render(axisOverlayScene, axisOverlayCamera)
         renderer.setScissorTest(false)
         renderer.setViewport(0, 0, width, height)
