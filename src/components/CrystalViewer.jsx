@@ -14,8 +14,8 @@ const BG      = new THREE.Color(0x0f1117)   // dark background (matches referenc
 const EXPORT_BG = new THREE.Color(0xffffff) // white for publication exports
 
 const LIGHT_PROFILES = {
-  view:   { ambient: 0.82, hemi: 0.36, key: 0.42, fill: 0.24 },
-  export: { ambient: 0.9, hemi: 0.28, key: 0.32, fill: 0.18 },
+  view:   { ambient: 0.48, hemi: 0.24, key: 0.52, fill: 0.14 },
+  export: { ambient: 0.34, hemi: 0.12, key: 0.46, fill: 0.12 },
 }
 
 function makeAtomMaterial()  {
@@ -157,7 +157,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     const lightRigRoot = new THREE.Group()
     scene.add(lightRigRoot)
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 1)
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xc9ced6, 1)
     hemi.position.set(0, 2.5, 1.5)
     lightRigRoot.add(hemi)
 
@@ -172,7 +172,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     const fillTarget = new THREE.Object3D()
     fillTarget.position.set(0, 0, -8)
     lightRigRoot.add(fillTarget)
-    const fill = new THREE.DirectionalLight(0xf6f7ff, 1)
+    const fill = new THREE.DirectionalLight(0xe7ebf3, 1)
     fill.position.set(-2.6, 0.9, 4.4)
     fill.target = fillTarget
     lightRigRoot.add(fill)
