@@ -2,7 +2,7 @@
 // Handles: cell parameters, atom_site loops, symmetry operations, space group
 
 import { labelToSymbol } from '../lib/elements.js'
-import { latticeFromParams, fracToCart } from '../lib/math.js'
+import { latticeFromParams } from '../lib/math.js'
 
 // ---- Tokenizer --------------------------------------------------------------
 function tokenize(text) {

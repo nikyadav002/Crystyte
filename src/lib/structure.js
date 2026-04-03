@@ -1,5 +1,5 @@
 import { getElement } from './elements.js'
-import { mat3Inv, fracToCart, cartToFrac, micFrac, vecLen, getLatticeParams, centroid } from './math.js'
+import { mat3Inv, fracToCart, cartToFrac, micFrac, getLatticeParams, centroid } from './math.js'
 
 // ---- Formula ----------------------------------------------------------------
 

@@ -100,11 +100,33 @@ export const ELEMENTS = {
   XX: { name:'Unknown',      color:'#FF69B4', radius:1.50, vdw:1.80 },
 }
 
+const VESTA_COLORS = {
+  H:  '#f4c2c2',
+  B:  '#e6b3b3',
+  C:  '#9a613d',
+  N:  '#b7c2f4',
+  O:  '#f04b4b',
+  F:  '#6fd36f',
+  Si: '#d7b18a',
+  P:  '#f2a33b',
+  S:  '#f2d24b',
+  Cl: '#5cc56c',
+  Br: '#8f4a3d',
+  I:  '#8e1f8a',
+}
+
 export function getElement(symbol) {
   if (!symbol) return ELEMENTS.XX
   if (ELEMENTS[symbol]) return ELEMENTS[symbol]
   const cap = symbol.charAt(0).toUpperCase() + symbol.slice(1).toLowerCase()
   return ELEMENTS[cap] ?? ELEMENTS.XX
+}
+
+export function getElementColor(symbol) {
+  if (!symbol) return ELEMENTS.XX.color
+  const normalized = symbol.charAt(0).toUpperCase() + symbol.slice(1).toLowerCase()
+  const element = getElement(normalized)
+  return VESTA_COLORS[normalized] ?? element.color
 }
 
 // Extract element symbol from a CIF-style atom label like "Cu1", "Fe2a", "O1_a"

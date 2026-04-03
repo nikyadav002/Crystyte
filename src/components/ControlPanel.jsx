@@ -1,4 +1,4 @@
-export const DISPLAY_MODES = [
+const DISPLAY_MODES = [
   { id: 'ball-stick', label: 'Ball & Stick' },
   { id: 'spacefill',  label: 'Spacefill'    },
   { id: 'stick',      label: 'Stick'        },

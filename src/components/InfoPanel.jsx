@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { ELEMENTS } from '../lib/elements.js'
+import { ELEMENTS, getElementColor } from '../lib/elements.js'
 
 export default function InfoPanel({ structure, customColors, onColorChange }) {
   const fmt = (n, d = 4) => (typeof n === 'number' ? n.toFixed(d) : '—')
@@ -65,7 +65,7 @@ export default function InfoPanel({ structure, customColors, onColorChange }) {
           <div className="element-swatches">
             {Object.entries(elementCounts).map(([sym, count]) => {
               const el = ELEMENTS[sym] ?? ELEMENTS.XX
-              const color = customColors?.[sym] ?? el.color
+              const color = customColors?.[sym] ?? getElementColor(sym)
               return (
                 <div key={sym} className="swatch-row">
                   <label className="swatch-label" title={el.name}>

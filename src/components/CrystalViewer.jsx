@@ -1,7 +1,7 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { getElement } from '../lib/elements.js'
+import { getElement, getElementColor } from '../lib/elements.js'
 import { expandSupercell, detectBonds, cellBoxLines } from '../lib/structure.js'
 
 const MODES = {
@@ -13,11 +13,25 @@ const MODES = {
 const BG      = new THREE.Color(0x0f1117)   // dark background (matches reference)
 const EXPORT_BG = new THREE.Color(0xffffff) // white for publication exports
 
+const LIGHT_PROFILES = {
+  view:   { ambient: 0.82, hemi: 0.36, key: 0.42, fill: 0.24 },
+  export: { ambient: 0.9, hemi: 0.28, key: 0.32, fill: 0.18 },
+}
+
 function makeAtomMaterial()  {
-  return new THREE.MeshPhongMaterial({ shininess: 70, specular: 0x222222 })
+  return new THREE.MeshLambertMaterial()
 }
 function makeBondMaterial()  {
-  return new THREE.MeshPhongMaterial({ shininess: 30 })
+  return new THREE.MeshLambertMaterial()
+}
+
+function applyLightProfile(rig, profileName = 'view') {
+  if (!rig) return
+  const profile = LIGHT_PROFILES[profileName] ?? LIGHT_PROFILES.view
+  rig.ambient.intensity = profile.ambient
+  rig.hemi.intensity = profile.hemi
+  rig.key.intensity = profile.key
+  rig.fill.intensity = profile.fill
 }
 
 // ---- PNG DPI injection -------------------------------------------------------
@@ -71,7 +85,7 @@ function cylinderMatrix(start, end, radius) {
 }
 
 // ---- Camera + depth-cue fog -------------------------------------------------
-function frameCamera(camera, controls, center, radius, scene) {
+function frameCamera(camera, controls, center, radius) {
   const c3      = new THREE.Vector3(...center)
   const halfFov = 45 * Math.PI / 360
   const fitDist = (radius / Math.tan(halfFov)) * 1.35
@@ -126,6 +140,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setSize(el.clientWidth, el.clientHeight)
     renderer.outputEncoding = THREE.sRGBEncoding
+    renderer.toneMapping = THREE.NoToneMapping
     el.appendChild(renderer.domElement)
 
     const scene = new THREE.Scene()
@@ -134,14 +149,36 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     const perspCam = new THREE.PerspectiveCamera(45, el.clientWidth / el.clientHeight, 0.01, 2000)
     perspCam.position.set(15, 12, 20)
 
-    // Exact 3-light setup from reference (cdfm-iitd.github.io)
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5))
-    const dl1 = new THREE.DirectionalLight(0xffffff, 0.9)
-    dl1.position.set(50, 60, 40)
-    scene.add(dl1)
-    const dl2 = new THREE.DirectionalLight(0xbbd4ff, 0.35)
-    dl2.position.set(-40, -20, -50)
-    scene.add(dl2)
+    const ambient = new THREE.AmbientLight(0xffffff, 1)
+    scene.add(ambient)
+
+    // Keep lighting aligned with the camera so atoms do not split into a bright
+    // and dark side when the model rotates relative to world-space lights.
+    const lightRigRoot = new THREE.Group()
+    scene.add(lightRigRoot)
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 1)
+    hemi.position.set(0, 2.5, 1.5)
+    lightRigRoot.add(hemi)
+
+    const keyTarget = new THREE.Object3D()
+    keyTarget.position.set(0, 0, -8)
+    lightRigRoot.add(keyTarget)
+    const key = new THREE.DirectionalLight(0xffffff, 1)
+    key.position.set(2.4, 2.8, 5.5)
+    key.target = keyTarget
+    lightRigRoot.add(key)
+
+    const fillTarget = new THREE.Object3D()
+    fillTarget.position.set(0, 0, -8)
+    lightRigRoot.add(fillTarget)
+    const fill = new THREE.DirectionalLight(0xf6f7ff, 1)
+    fill.position.set(-2.6, 0.9, 4.4)
+    fill.target = fillTarget
+    lightRigRoot.add(fill)
+
+    const lightRig = { ambient, hemi, key, fill, root: lightRigRoot }
+    applyLightProfile(lightRig, 'view')
 
     const controls = new OrbitControls(perspCam, renderer.domElement)
     controls.enableDamping  = true
@@ -152,7 +189,10 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     const animate = () => {
       animId = requestAnimationFrame(animate)
       controls.update()
-      renderer.render(scene, stateRef.current.activeCamera ?? perspCam)
+      const activeCamera = stateRef.current.activeCamera ?? perspCam
+      lightRigRoot.position.copy(activeCamera.position)
+      lightRigRoot.quaternion.copy(activeCamera.quaternion)
+      renderer.render(scene, activeCamera)
     }
     animate()
 
@@ -171,7 +211,16 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     })
     ro.observe(el)
 
-    stateRef.current = { renderer, scene, perspCam, activeCamera: perspCam, controls, animId, ro }
+    stateRef.current = {
+      renderer,
+      scene,
+      perspCam,
+      activeCamera: perspCam,
+      controls,
+      animId,
+      ro,
+      lightRig,
+    }
 
     return () => {
       cancelAnimationFrame(animId)
@@ -272,7 +321,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       mat4.makeScale(r, r, r)
       mat4.setPosition(pos)
       atomMesh.setMatrixAt(i, mat4)
-      col.set(customColors?.[symbol] ?? el.color)
+      col.set(customColors?.[symbol] ?? getElementColor(symbol))
       atomMesh.setColorAt(i, col)
     }
     atomMesh.instanceMatrix.needsUpdate = true
@@ -291,12 +340,12 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       for (const seg of allSegs) {
         const mA = cylinderMatrix(seg.start, seg.mid, mode.bondRadius)
         if (mA) mesh.setMatrixAt(idx, mA)
-        col.set(customColors?.[seg.symStart ?? atoms[seg.i]?.symbol] ?? getElement(seg.symStart ?? atoms[seg.i]?.symbol).color)
+        col.set(customColors?.[seg.symStart ?? atoms[seg.i]?.symbol] ?? getElementColor(seg.symStart ?? atoms[seg.i]?.symbol))
         mesh.setColorAt(idx, col); idx++
 
         const mB = cylinderMatrix(seg.mid, seg.end, mode.bondRadius)
         if (mB) mesh.setMatrixAt(idx, mB)
-        col.set(customColors?.[seg.symEnd ?? atoms[seg.j]?.symbol] ?? getElement(seg.symEnd ?? atoms[seg.j]?.symbol).color)
+        col.set(customColors?.[seg.symEnd ?? atoms[seg.j]?.symbol] ?? getElementColor(seg.symEnd ?? atoms[seg.j]?.symbol))
         mesh.setColorAt(idx, col); idx++
       }
       mesh.instanceMatrix.needsUpdate = true
@@ -329,7 +378,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
         if (d > maxR) maxR = d
       }
       const cam = stateRef.current.activeCamera ?? stateRef.current.perspCam
-      frameCamera(cam, controls, center, maxR, scene)
+      frameCamera(cam, controls, center, maxR)
       stateRef.current.resetPos    = cam.position.clone()
       stateRef.current.resetTarget = controls.target.clone()
     }
@@ -347,7 +396,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     },
 
     exportPNG(scale = 1) {
-      const { renderer, scene, activeCamera } = stateRef.current
+      const { renderer, scene, activeCamera, lightRig } = stateRef.current
       if (!renderer || !activeCamera) return
 
       const dpr  = renderer.getPixelRatio()
@@ -357,6 +406,9 @@ const CrystalViewer = forwardRef(function CrystalViewer(
 
       // White background for publication export
       scene.background = EXPORT_BG.clone()
+      applyLightProfile(lightRig, 'export')
+      lightRig.root.position.copy(activeCamera.position)
+      lightRig.root.quaternion.copy(activeCamera.quaternion)
       renderer.setPixelRatio(1)
       renderer.setSize(cssW * s, cssH * s, false)
       if (activeCamera.isOrthographicCamera) {
@@ -369,6 +421,9 @@ const CrystalViewer = forwardRef(function CrystalViewer(
 
       // Restore dark background
       scene.background = BG.clone()
+      applyLightProfile(lightRig, 'view')
+      lightRig.root.position.copy(activeCamera.position)
+      lightRig.root.quaternion.copy(activeCamera.quaternion)
       renderer.setPixelRatio(dpr)
       renderer.setSize(cssW, cssH, false)
       if (activeCamera.isOrthographicCamera) {
