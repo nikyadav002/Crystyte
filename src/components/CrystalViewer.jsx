@@ -441,7 +441,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     group.name  = 'structureGroup'
 
     const margins = lattice ? shellMargins(lattice) : null
-    const allAtoms = []
+    const candidateAtoms = []
     const atomKeys = new Set()
     const shifts = lattice
       ? [-1, 0, 1].flatMap(sa => [-1, 0, 1].flatMap(sb => [-1, 0, 1].map(sc => [sa, sb, sc])))
@@ -452,7 +452,12 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       const baseFrac = lattice && Linv ? cartToFrac(atom.position, Linv) : null
       for (const shift of shifts) {
         if (!lattice || !Linv) {
-          allAtoms.push({ symbol: atom.symbol, position: [...atom.position], sourceIndex: i })
+          candidateAtoms.push({
+            symbol: atom.symbol,
+            position: [...atom.position],
+            sourceIndex: i,
+            inside: true,
+          })
           break
         }
         const shiftedFrac = [
@@ -472,14 +477,47 @@ const CrystalViewer = forwardRef(function CrystalViewer(
         const key = `${atom.symbol}:${position.map(v => Math.round(v * 1000)).join(',')}`
         if (atomKeys.has(key)) continue
         atomKeys.add(key)
-        allAtoms.push({ symbol: atom.symbol, position, sourceIndex: i })
+        candidateAtoms.push({
+          symbol: atom.symbol,
+          position,
+          sourceIndex: i,
+          inside: isInsideCell(shiftedFrac),
+        })
       }
     }
 
-    const displayBonds = mode.showBonds ? detectBonds(allAtoms, null, null) : []
-    const allSegs = displayBonds.map(bond => ({
-      symStart: allAtoms[bond.i].symbol,
-      symEnd: allAtoms[bond.j].symbol,
+    const displayBonds = mode.showBonds ? detectBonds(candidateAtoms, null, null) : []
+    const visible = new Set()
+    for (let i = 0; i < candidateAtoms.length; i++) {
+      if (candidateAtoms[i].inside) visible.add(i)
+    }
+    if (mode.showBonds && displayBonds.length) {
+      let changed = true
+      while (changed) {
+        changed = false
+        for (const bond of displayBonds) {
+          const hasI = visible.has(bond.i)
+          const hasJ = visible.has(bond.j)
+          if (hasI === hasJ) continue
+          visible.add(hasI ? bond.j : bond.i)
+          changed = true
+        }
+      }
+    } else {
+      for (let i = 0; i < candidateAtoms.length; i++) visible.add(i)
+    }
+
+    const allAtoms = []
+    for (let i = 0; i < candidateAtoms.length; i++) {
+      if (!visible.has(i)) continue
+      allAtoms.push(candidateAtoms[i])
+    }
+
+    const allSegs = displayBonds
+      .filter(bond => visible.has(bond.i) && visible.has(bond.j))
+      .map(bond => ({
+      symStart: candidateAtoms[bond.i].symbol,
+      symEnd: candidateAtoms[bond.j].symbol,
       start: bond.start,
       mid: bond.mid,
       end: bond.end,
