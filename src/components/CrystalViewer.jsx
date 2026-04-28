@@ -1,6 +1,7 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
 import { getElement, getElementColor } from '../lib/elements.js'
 import { expandSupercell, detectBonds, cellBoxLines } from '../lib/structure.js'
 import { cartToFrac } from '../lib/math.js'
@@ -22,12 +23,24 @@ const CELL_EDGE_COLOR = 0x000000
 const AXIS_COLORS = { a: '#d35d5d', b: '#5ea96e', c: '#5d7bd6' }
 const AXIS_OVERLAY_SIZE = 164
 const SHELL_CART_MARGIN = 3.2
+const POLYHEDRA_OPACITY = 0.28
+const POLYHEDRA_MIN_NEIGHBORS = 4
+const POLYHEDRA_MIN_RADIUS = 1.05
 
 function makeAtomMaterial()  {
   return new THREE.MeshLambertMaterial()
 }
 function makeBondMaterial()  {
   return new THREE.MeshLambertMaterial()
+}
+function makePolyhedraMaterial(color) {
+  return new THREE.MeshLambertMaterial({
+    color,
+    transparent: true,
+    opacity: POLYHEDRA_OPACITY,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  })
 }
 
 function applyLightProfile(rig, profileName = 'view') {
@@ -265,7 +278,7 @@ function orientCamera(camera, controls, center, radius, direction) {
 
 // =============================================================================
 const CrystalViewer = forwardRef(function CrystalViewer(
-  { structure, displayMode, supercell, customColors, cameraMode, bondOverrides },
+  { structure, displayMode, supercell, customColors, cameraMode, bondOverrides, showPolyhedra },
   ref,
 ) {
   const mountRef  = useRef(null)
@@ -530,8 +543,9 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       allAtoms.push(candidateAtoms[i])
     }
 
-    const allSegs = displayBonds
+    const visibleBonds = displayBonds
       .filter(bond => visible.has(bond.i) && visible.has(bond.j))
+    const allSegs = visibleBonds
       .map(bond => ({
       symStart: candidateAtoms[bond.i].symbol,
       symEnd: candidateAtoms[bond.j].symbol,
@@ -588,6 +602,53 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       group.add(mesh)
     }
 
+    if (showPolyhedra && visibleBonds.length) {
+      const neighborMap = new Map()
+      for (const bond of visibleBonds) {
+        if (!neighborMap.has(bond.i)) neighborMap.set(bond.i, [])
+        if (!neighborMap.has(bond.j)) neighborMap.set(bond.j, [])
+        neighborMap.get(bond.i).push(candidateAtoms[bond.j].position)
+        neighborMap.get(bond.j).push(candidateAtoms[bond.i].position)
+      }
+
+      for (const [atomIndex, neighborPositions] of neighborMap) {
+        const atom = candidateAtoms[atomIndex]
+        if (!atom?.inside) continue
+        if (getElement(atom.symbol).radius < POLYHEDRA_MIN_RADIUS) continue
+
+        const uniquePoints = []
+        const pointKeys = new Set()
+        for (const position of neighborPositions) {
+          const key = position.map(value => Math.round(value * 1000)).join(',')
+          if (pointKeys.has(key)) continue
+          pointKeys.add(key)
+          uniquePoints.push(new THREE.Vector3(...position))
+        }
+        if (uniquePoints.length < POLYHEDRA_MIN_NEIGHBORS) continue
+
+        try {
+          const polyGeo = new ConvexGeometry(uniquePoints)
+          polyGeo.computeVertexNormals()
+
+          const centerColor = new THREE.Color(customColors?.[atom.symbol] ?? getElementColor(atom.symbol))
+          const polyMesh = new THREE.Mesh(polyGeo, makePolyhedraMaterial(centerColor))
+          group.add(polyMesh)
+
+          const edgeGeo = new THREE.EdgesGeometry(polyGeo, 20)
+          const edgeMat = new THREE.LineBasicMaterial({
+            color: centerColor.clone().multiplyScalar(0.65),
+            transparent: true,
+            opacity: 0.42,
+            depthWrite: false,
+          })
+          const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat)
+          group.add(edgeLines)
+        } catch {
+          // Degenerate or nearly coplanar neighborhoods can fail convex hull creation.
+        }
+      }
+    }
+
     // Cell box
     if (lattice) {
       const pts = cellBoxLines(lattice)
@@ -636,7 +697,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       stateRef.current.resetPos    = cam.position.clone()
       stateRef.current.resetTarget = controls.target.clone()
     }
-  }, [structure, displayMode, supercell, customColors, bondOverrides])
+  }, [structure, displayMode, supercell, customColors, bondOverrides, showPolyhedra])
 
   // ---- Imperative handle --------------------------------------------------
   useImperativeHandle(ref, () => ({

@@ -34,6 +34,7 @@ export default function App() {
   const [customColors,  setCustomColors]  = useState({})
   const [bondOverrides, setBondOverrides] = useState({})
   const [bondPair,      setBondPair]      = useState(['C', 'C'])
+  const [showPolyhedra, setShowPolyhedra] = useState(false)
   const [exportScale,   setExportScale]   = useState(4)
   const [cameraMode,    setCameraMode]    = useState('ortho')
   const [theme,         setTheme]         = useState('light')
@@ -243,6 +244,7 @@ export default function App() {
             customColors={customColors}
             cameraMode={cameraMode}
             bondOverrides={bondOverrides}
+            showPolyhedra={showPolyhedra}
           />
         </main>
         <InfoPanel
@@ -264,6 +266,7 @@ export default function App() {
         supercell={supercell}           onSupercell={setSupercell}
         exportScale={exportScale}       onExportScale={setExportScale}
         cameraMode={cameraMode}         onCameraMode={setCameraMode}
+        showPolyhedra={showPolyhedra}   onShowPolyhedra={setShowPolyhedra}
         onViewAxis={handleViewAxis}
         onReset={handleReset}
         onOpen={handleOpen}

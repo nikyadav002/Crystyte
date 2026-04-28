@@ -1,6 +1,7 @@
 export default function ControlPanel({
   supercell,   onSupercell,
   cameraMode,  onCameraMode,
+  showPolyhedra, onShowPolyhedra,
   onViewAxis,
   onReset, onOpen,
   exportScale, onExportScale,
@@ -79,6 +80,28 @@ export default function ControlPanel({
               />
             </>
           ))}
+        </div>
+      </div>
+
+      <div className="ctrl-divider" />
+
+      <div className="ctrl-group">
+        <span className="ctrl-label">Polyhedra</span>
+        <div className="btn-group">
+          <button
+            className={`btn-mode${!showPolyhedra ? ' active' : ''}`}
+            onClick={() => onShowPolyhedra(false)}
+            disabled={!hasStructure}
+          >
+            Off
+          </button>
+          <button
+            className={`btn-mode${showPolyhedra ? ' active' : ''}`}
+            onClick={() => onShowPolyhedra(true)}
+            disabled={!hasStructure}
+          >
+            On
+          </button>
         </div>
       </div>
 
