@@ -2,8 +2,10 @@ export default function ControlPanel({
   supercell,   onSupercell,
   cameraMode,  onCameraMode,
   showPolyhedra, onShowPolyhedra,
+  saveFormat, onSaveFormat,
   onViewAxis,
   onReset, onOpen,
+  onSaveSupercell,
   exportScale, onExportScale,
   onExport,
   hasStructure,
@@ -103,6 +105,32 @@ export default function ControlPanel({
             On
           </button>
         </div>
+      </div>
+
+      <div className="ctrl-divider" />
+
+      <div className="ctrl-group">
+        <span className="ctrl-label">Save</span>
+        <div className="btn-group">
+          {['vasp', 'cif'].map(format => (
+            <button
+              key={format}
+              className={`btn-mode${saveFormat === format ? ' active' : ''}`}
+              onClick={() => onSaveFormat(format)}
+              disabled={!hasStructure}
+            >
+              {format.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <button className="btn-icon" onClick={onSaveSupercell} disabled={!hasStructure}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+          <span>Save Supercell</span>
+        </button>
       </div>
 
       <div className="ctrl-divider" />

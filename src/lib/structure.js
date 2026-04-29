@@ -104,6 +104,126 @@ export function expandSupercell(structure, [na, nb, nc]) {
   }
 }
 
+function formatXYZNumber(value) {
+  const normalized = Math.abs(value) < 1e-9 ? 0 : value
+  return normalized.toFixed(8)
+}
+
+function formatCrystalNumber(value) {
+  const normalized = Math.abs(value) < 1e-9 ? 0 : value
+  return normalized.toFixed(8)
+}
+
+function wrapFractional(value) {
+  let wrapped = value % 1
+  if (wrapped < 0) wrapped += 1
+  if (Math.abs(wrapped - 1) < 1e-8) wrapped = 0
+  return wrapped
+}
+
+export function serializeXYZ(structure, title = '') {
+  if (!structure?.atoms?.length) return ''
+
+  const lines = [String(structure.atoms.length)]
+  const headerParts = []
+  if (structure.lattice) {
+    const latticeText = structure.lattice
+      .flat()
+      .map(formatXYZNumber)
+      .join(' ')
+    headerParts.push(`Lattice="${latticeText}"`)
+  }
+  if (title) headerParts.push(title)
+  lines.push(headerParts.join(' ').trim())
+
+  for (const atom of structure.atoms) {
+    lines.push([
+      atom.symbol,
+      formatXYZNumber(atom.position[0]),
+      formatXYZNumber(atom.position[1]),
+      formatXYZNumber(atom.position[2]),
+    ].join(' '))
+  }
+
+  return `${lines.join('\n')}\n`
+}
+
+export function serializePOSCAR(structure, title = '') {
+  if (!structure?.atoms?.length || !structure.lattice) return ''
+
+  const Linv = structure.Linv ?? mat3Inv(structure.lattice)
+  const groupedAtoms = new Map()
+  for (const atom of structure.atoms) {
+    if (!groupedAtoms.has(atom.symbol)) groupedAtoms.set(atom.symbol, [])
+    groupedAtoms.get(atom.symbol).push(atom)
+  }
+
+  const symbols = [...groupedAtoms.keys()]
+  const lines = [title || structure.title || 'crystyte supercell', '1.0']
+  for (const vector of structure.lattice) {
+    lines.push(vector.map(formatCrystalNumber).join(' '))
+  }
+  lines.push(symbols.join(' '))
+  lines.push(symbols.map(symbol => groupedAtoms.get(symbol).length).join(' '))
+  lines.push('Direct')
+
+  for (const symbol of symbols) {
+    for (const atom of groupedAtoms.get(symbol)) {
+      const frac = cartToFrac(atom.position, Linv).map(wrapFractional)
+      lines.push(frac.map(formatCrystalNumber).join(' '))
+    }
+  }
+
+  return `${lines.join('\n')}\n`
+}
+
+export function serializeCIF(structure, title = '') {
+  if (!structure?.atoms?.length || !structure.lattice) return ''
+
+  const Linv = structure.Linv ?? mat3Inv(structure.lattice)
+  const params = structure.latticeParams ?? getLatticeParams(structure.lattice)
+  const blockName = (title || structure.title || 'crystyte_supercell')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'crystyte_supercell'
+
+  const lines = [
+    `data_${blockName}`,
+    `_cell_length_a ${formatCrystalNumber(params.a)}`,
+    `_cell_length_b ${formatCrystalNumber(params.b)}`,
+    `_cell_length_c ${formatCrystalNumber(params.c)}`,
+    `_cell_angle_alpha ${formatCrystalNumber(params.alpha)}`,
+    `_cell_angle_beta ${formatCrystalNumber(params.beta)}`,
+    `_cell_angle_gamma ${formatCrystalNumber(params.gamma)}`,
+    `_symmetry_space_group_name_H-M 'P 1'`,
+    '',
+    'loop_',
+    '_symmetry_equiv_pos_as_xyz',
+    "'x, y, z'",
+    '',
+    'loop_',
+    '_atom_site_label',
+    '_atom_site_type_symbol',
+    '_atom_site_fract_x',
+    '_atom_site_fract_y',
+    '_atom_site_fract_z',
+  ]
+
+  const labelCounts = {}
+  for (const atom of structure.atoms) {
+    labelCounts[atom.symbol] = (labelCounts[atom.symbol] ?? 0) + 1
+    const label = `${atom.symbol}${labelCounts[atom.symbol]}`
+    const frac = cartToFrac(atom.position, Linv).map(wrapFractional)
+    lines.push([
+      label,
+      atom.symbol,
+      ...frac.map(formatCrystalNumber),
+    ].join(' '))
+  }
+
+  return `${lines.join('\n')}\n`
+}
+
 // ---- Bond detection (MIC) ---------------------------------------------------
 // Returns array of { i, j, start, mid, end } (all Cartesian)
 // `end` is the MIC image of atom j relative to atom i.

@@ -5,7 +5,7 @@ import InfoPanel    from './components/InfoPanel.jsx'
 import ControlPanel from './components/ControlPanel.jsx'
 import { getBondRule, getBondRuleKey } from './lib/bondingLogic.js'
 import { getElement } from './lib/elements.js'
-import { BOND_SCALE, MIN_BOND } from './lib/structure.js'
+import { BOND_SCALE, MIN_BOND, expandSupercell, serializeCIF, serializePOSCAR } from './lib/structure.js'
 
 const createWorker = () =>
   new Worker(new URL('./workers/parser.worker.js', import.meta.url), { type: 'module' })
@@ -27,6 +27,15 @@ function getBaseBondRule(symA, symB) {
   return getBondRule(symA, symB) ?? getFallbackBondRule(symA, symB)
 }
 
+function getSupercellFilename(filename, supercell) {
+  const stem = (filename ?? 'crystyte_crystal').replace(/\.[^.]+$/, '')
+  return `${stem}_${supercell.join('x')}`
+}
+
+function getDefaultSaveFormat(filename) {
+  return /\.cif$/i.test(filename ?? '') ? 'cif' : 'vasp'
+}
+
 export default function App() {
   const [structure,     setStructure]     = useState(null)
   const [displayMode,   setDisplayMode]   = useState('ball-stick')
@@ -35,6 +44,7 @@ export default function App() {
   const [bondOverrides, setBondOverrides] = useState({})
   const [bondPair,      setBondPair]      = useState(['C', 'C'])
   const [showPolyhedra, setShowPolyhedra] = useState(false)
+  const [saveFormat,    setSaveFormat]    = useState('vasp')
   const [exportScale,   setExportScale]   = useState(4)
   const [cameraMode,    setCameraMode]    = useState('ortho')
   const [theme,         setTheme]         = useState('light')
@@ -50,13 +60,21 @@ export default function App() {
     setError(null)
     setCustomColors({})
     setBondOverrides({})
+    setSaveFormat(getDefaultSaveFormat(filename))
     setSupercell([1, 1, 1])
     workerRef.current?.terminate()
     const w = createWorker()
     workerRef.current = w
     w.onmessage = ({ data }) => {
       setLoading(false)
-      if (data.error) { setError(data.error) } else { setStructure(data.structure) }
+      if (data.error) {
+        setError(data.error)
+      } else {
+        setStructure({
+          ...data.structure,
+          sourceFilename: filename,
+        })
+      }
       w.terminate()
     }
     w.onerror = (e) => { setLoading(false); setError(e.message ?? 'Parse error'); w.terminate() }
@@ -146,6 +164,31 @@ export default function App() {
   }, [effectiveBondPair])
 
   const handleExport = useCallback(() => viewerRef.current?.exportPNG(exportScale), [exportScale])
+  const handleSaveSupercell = useCallback(() => {
+    if (!structure) return
+
+    const expanded = expandSupercell(structure, supercell) ?? structure
+    if (!expanded.lattice) {
+      setError('Saving as VASP or CIF requires lattice information')
+      return
+    }
+
+    const title = [expanded.title || structure.title || 'crystyte supercell', `supercell ${supercell.join('x')}`]
+      .filter(Boolean)
+      .join(' | ')
+    const text = saveFormat === 'cif'
+      ? serializeCIF(expanded, title)
+      : serializePOSCAR(expanded, title)
+    const extension = saveFormat === 'cif' ? '.cif' : '.vasp'
+    const mimeType = saveFormat === 'cif' ? 'chemical/x-cif' : 'chemical/x-vasp'
+    const blob = new Blob([text], { type: mimeType })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${getSupercellFilename(structure.sourceFilename, supercell)}${extension}`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [saveFormat, structure, supercell])
   const handleReset  = useCallback(() => viewerRef.current?.resetView(), [])
   const handleOpen   = useCallback(() => fileInputRef.current?.click(), [])
   const handleViewAxis = useCallback((axis) => viewerRef.current?.viewAxis(axis), [])
@@ -267,9 +310,11 @@ export default function App() {
         exportScale={exportScale}       onExportScale={setExportScale}
         cameraMode={cameraMode}         onCameraMode={setCameraMode}
         showPolyhedra={showPolyhedra}   onShowPolyhedra={setShowPolyhedra}
+        saveFormat={saveFormat}         onSaveFormat={setSaveFormat}
         onViewAxis={handleViewAxis}
         onReset={handleReset}
         onOpen={handleOpen}
+        onSaveSupercell={handleSaveSupercell}
         onExport={handleExport}
         hasStructure={Boolean(structure)}
       />
