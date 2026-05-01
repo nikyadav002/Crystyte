@@ -15,6 +15,17 @@ const DISPLAY_MODES = [
   { id: 'spacefill',  label: 'Spacefill'    },
   { id: 'stick',      label: 'Stick'        },
 ]
+const DEFAULT_POLYHEDRA_CENTER_RADIUS = 1.05
+const DEFAULT_POLYHEDRA_SETTINGS = {
+  centerMode: 'auto',
+  centerSymbols: [],
+  ligandMode: 'any',
+  ligandSymbol: '',
+  opacity: 0.28,
+  colorMode: 'center',
+  color: '#7b2f82',
+  edgeThickness: 1.1,
+}
 
 function getFallbackBondRule(symA, symB) {
   return {
@@ -44,6 +55,7 @@ export default function App() {
   const [bondOverrides, setBondOverrides] = useState({})
   const [bondPair,      setBondPair]      = useState(['C', 'C'])
   const [showPolyhedra, setShowPolyhedra] = useState(false)
+  const [polyhedraSettings, setPolyhedraSettings] = useState(DEFAULT_POLYHEDRA_SETTINGS)
   const [saveFormat,    setSaveFormat]    = useState('vasp')
   const [exportScale,   setExportScale]   = useState(4)
   const [cameraMode,    setCameraMode]    = useState('ortho')
@@ -60,6 +72,7 @@ export default function App() {
     setError(null)
     setCustomColors({})
     setBondOverrides({})
+    setPolyhedraSettings(DEFAULT_POLYHEDRA_SETTINGS)
     setSaveFormat(getDefaultSaveFormat(filename))
     setSupercell([1, 1, 1])
     workerRef.current?.terminate()
@@ -105,6 +118,20 @@ export default function App() {
     ) return bondPair
     return [elementSymbols[0], elementSymbols[1] ?? elementSymbols[0]]
   }, [bondPair, elementSymbols])
+
+  const effectivePolyhedraCenters = useMemo(() => {
+    const validSymbols = polyhedraSettings.centerSymbols.filter(sym => elementSymbols.includes(sym))
+    if (polyhedraSettings.centerMode === 'custom') return validSymbols
+
+    const autoSymbols = elementSymbols.filter(sym => getElement(sym).radius >= DEFAULT_POLYHEDRA_CENTER_RADIUS)
+    return autoSymbols.length ? autoSymbols : elementSymbols
+  }, [elementSymbols, polyhedraSettings.centerMode, polyhedraSettings.centerSymbols])
+
+  const effectivePolyhedraSettings = useMemo(() => ({
+    ...polyhedraSettings,
+    centerSymbols: effectivePolyhedraCenters,
+    ligandSymbol: polyhedraSettings.ligandMode === 'symbol' ? polyhedraSettings.ligandSymbol : '',
+  }), [effectivePolyhedraCenters, polyhedraSettings])
 
   const handleBondRuleChange = useCallback((field, value) => {
     const parsed = Number.parseFloat(value)
@@ -162,6 +189,50 @@ export default function App() {
       return next
     })
   }, [effectiveBondPair])
+
+  const handlePolyhedraSettingChange = useCallback((field, value) => {
+    setPolyhedraSettings(prev => ({ ...prev, [field]: value }))
+  }, [])
+
+  const handlePolyhedraCenterModeChange = useCallback((mode) => {
+    setPolyhedraSettings(prev => ({
+      ...prev,
+      centerMode: mode,
+      centerSymbols: mode === 'auto' ? [] : (prev.centerSymbols.length ? prev.centerSymbols : effectivePolyhedraCenters),
+    }))
+  }, [effectivePolyhedraCenters])
+
+  const handlePolyhedraCenterToggle = useCallback((symbol) => {
+    setPolyhedraSettings(prev => {
+      const baseList = prev.centerMode === 'custom' && prev.centerSymbols.length
+        ? prev.centerSymbols
+        : effectivePolyhedraCenters
+      const hasSymbol = baseList.includes(symbol)
+      return {
+        ...prev,
+        centerMode: 'custom',
+        centerSymbols: hasSymbol
+          ? baseList.filter(sym => sym !== symbol)
+          : [...baseList, symbol].sort(),
+      }
+    })
+  }, [effectivePolyhedraCenters])
+
+  const handlePolyhedraSelectAllCenters = useCallback(() => {
+    setPolyhedraSettings(prev => ({
+      ...prev,
+      centerMode: 'custom',
+      centerSymbols: [...elementSymbols],
+    }))
+  }, [elementSymbols])
+
+  const handlePolyhedraClearCenters = useCallback(() => {
+    setPolyhedraSettings(prev => ({
+      ...prev,
+      centerMode: 'custom',
+      centerSymbols: [],
+    }))
+  }, [])
 
   const handleExport = useCallback(() => viewerRef.current?.exportPNG(exportScale), [exportScale])
   const handleSaveSupercell = useCallback(() => {
@@ -288,6 +359,7 @@ export default function App() {
             cameraMode={cameraMode}
             bondOverrides={bondOverrides}
             showPolyhedra={showPolyhedra}
+            polyhedraSettings={effectivePolyhedraSettings}
           />
         </main>
         <InfoPanel
@@ -302,6 +374,15 @@ export default function App() {
           onBondRuleCreate={handleBondRuleCreate}
           onBondRuleDelete={handleBondRuleDelete}
           onBondRuleReset={handleBondRuleReset}
+          showPolyhedra={showPolyhedra}
+          polyhedraSettings={polyhedraSettings}
+          effectivePolyhedraCenters={effectivePolyhedraCenters}
+          availableSymbols={elementSymbols}
+          onPolyhedraSettingChange={handlePolyhedraSettingChange}
+          onPolyhedraCenterModeChange={handlePolyhedraCenterModeChange}
+          onPolyhedraCenterToggle={handlePolyhedraCenterToggle}
+          onPolyhedraSelectAllCenters={handlePolyhedraSelectAllCenters}
+          onPolyhedraClearCenters={handlePolyhedraClearCenters}
         />
       </div>
 

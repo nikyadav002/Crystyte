@@ -15,6 +15,15 @@ export default function InfoPanel({
   onBondRuleCreate,
   onBondRuleDelete,
   onBondRuleReset,
+  showPolyhedra,
+  polyhedraSettings,
+  effectivePolyhedraCenters,
+  availableSymbols,
+  onPolyhedraSettingChange,
+  onPolyhedraCenterModeChange,
+  onPolyhedraCenterToggle,
+  onPolyhedraSelectAllCenters,
+  onPolyhedraClearCenters,
 }) {
   const fmt = (n, d = 4) => (typeof n === 'number' ? n.toFixed(d) : '—')
 
@@ -44,6 +53,9 @@ export default function InfoPanel({
     default: 'Default bond',
     fallback: 'Radius fallback',
   }[bondRuleState ?? 'default']
+  const activePolyhedraCenters = polyhedraSettings?.centerMode === 'custom'
+    ? (polyhedraSettings.centerSymbols ?? [])
+    : (effectivePolyhedraCenters ?? [])
 
   if (!structure) {
     return (
@@ -104,6 +116,126 @@ export default function InfoPanel({
                 </div>
               )
             })}
+          </div>
+        </section>
+      )}
+
+      {uniqueSymbols.length > 0 && (
+        <section className="info-section">
+          <h3 className="info-heading">Polyhedra</h3>
+          <div className="bond-criteria">
+            <div className="bond-criteria-status">
+              {showPolyhedra ? 'Polyhedra visible' : 'Polyhedra hidden'}
+            </div>
+            <div className="bond-criteria-row">
+              <label className="bond-criteria-field">
+                <span>Centers</span>
+                <div className="btn-group">
+                  <button
+                    className={`btn-mode${polyhedraSettings?.centerMode !== 'custom' ? ' active' : ''}`}
+                    onClick={() => onPolyhedraCenterModeChange?.('auto')}
+                    type="button"
+                  >
+                    Auto
+                  </button>
+                  <button
+                    className={`btn-mode${polyhedraSettings?.centerMode === 'custom' ? ' active' : ''}`}
+                    onClick={() => onPolyhedraCenterModeChange?.('custom')}
+                    type="button"
+                  >
+                    Custom
+                  </button>
+                </div>
+              </label>
+              <label className="bond-criteria-field">
+                <span>Ligands</span>
+                <select
+                  value={polyhedraSettings?.ligandMode === 'symbol' ? polyhedraSettings.ligandSymbol : ''}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    onPolyhedraSettingChange?.('ligandMode', value ? 'symbol' : 'any')
+                    onPolyhedraSettingChange?.('ligandSymbol', value)
+                  }}
+                >
+                  <option value="">Any bonded</option>
+                  {availableSymbols?.map(sym => <option key={`poly-ligand-${sym}`} value={sym}>{sym}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="polyhedra-chip-actions">
+              <button className="btn-icon btn-inline" onClick={onPolyhedraSelectAllCenters} type="button">
+                All
+              </button>
+              <button className="btn-icon btn-inline" onClick={onPolyhedraClearCenters} type="button">
+                None
+              </button>
+            </div>
+            <div className="polyhedra-chip-grid">
+              {availableSymbols?.map(sym => {
+                const active = activePolyhedraCenters.includes(sym)
+                return (
+                  <button
+                    key={`poly-center-${sym}`}
+                    className={`polyhedra-chip${active ? ' active' : ''}`}
+                    onClick={() => onPolyhedraCenterToggle?.(sym)}
+                    type="button"
+                  >
+                    {sym}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="bond-criteria-row">
+              <label className="bond-criteria-field">
+                <span>Opacity</span>
+                <div className="polyhedra-range-row">
+                  <input
+                    type="range"
+                    min="0.05"
+                    max="0.85"
+                    step="0.01"
+                    value={polyhedraSettings?.opacity ?? 0.28}
+                    onChange={(e) => onPolyhedraSettingChange?.('opacity', Number.parseFloat(e.target.value))}
+                  />
+                  <span>{fmt(polyhedraSettings?.opacity ?? 0.28, 2)}</span>
+                </div>
+              </label>
+              <label className="bond-criteria-field">
+                <span>Edge thickness</span>
+                <div className="polyhedra-range-row">
+                  <input
+                    type="range"
+                    min="0.4"
+                    max="3"
+                    step="0.1"
+                    value={polyhedraSettings?.edgeThickness ?? 1.1}
+                    onChange={(e) => onPolyhedraSettingChange?.('edgeThickness', Number.parseFloat(e.target.value))}
+                  />
+                  <span>{fmt(polyhedraSettings?.edgeThickness ?? 1.1, 1)}×</span>
+                </div>
+              </label>
+            </div>
+            <div className="bond-criteria-row">
+              <label className="bond-criteria-field">
+                <span>Color</span>
+                <select
+                  value={polyhedraSettings?.colorMode ?? 'center'}
+                  onChange={(e) => onPolyhedraSettingChange?.('colorMode', e.target.value)}
+                >
+                  <option value="center">Center atom</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label className="bond-criteria-field">
+                <span>Custom color</span>
+                <input
+                  type="color"
+                  value={polyhedraSettings?.color ?? '#7b2f82'}
+                  disabled={polyhedraSettings?.colorMode !== 'custom'}
+                  onChange={(e) => onPolyhedraSettingChange?.('color', e.target.value)}
+                />
+              </label>
+            </div>
           </div>
         </section>
       )}

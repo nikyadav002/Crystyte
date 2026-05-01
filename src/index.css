@@ -244,6 +244,30 @@ button { cursor: pointer; }
 }
 .bond-criteria-actions { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
 .btn-inline { padding: 4px 10px; font-size: 11px; }
+.polyhedra-chip-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.polyhedra-chip-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.polyhedra-chip {
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+.polyhedra-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.polyhedra-range-row { display: flex; align-items: center; gap: 8px; }
+.polyhedra-range-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.polyhedra-range-row span {
+  min-width: 36px;
+  text-align: right;
+  color: var(--text-bright);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ---- Control panel (bottom bar) ---- */
 .control-panel {

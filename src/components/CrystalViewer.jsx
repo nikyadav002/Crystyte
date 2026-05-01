@@ -23,9 +23,7 @@ const CELL_EDGE_COLOR = 0x000000
 const AXIS_COLORS = { a: '#d35d5d', b: '#5ea96e', c: '#5d7bd6' }
 const AXIS_OVERLAY_SIZE = 164
 const SHELL_CART_MARGIN = 3.2
-const POLYHEDRA_OPACITY = 0.28
 const POLYHEDRA_MIN_NEIGHBORS = 4
-const POLYHEDRA_MIN_RADIUS = 1.05
 
 function makeAtomMaterial()  {
   return new THREE.MeshLambertMaterial()
@@ -33,11 +31,11 @@ function makeAtomMaterial()  {
 function makeBondMaterial()  {
   return new THREE.MeshLambertMaterial()
 }
-function makePolyhedraMaterial(color) {
+function makePolyhedraMaterial(color, opacity) {
   return new THREE.MeshLambertMaterial({
     color,
     transparent: true,
-    opacity: POLYHEDRA_OPACITY,
+    opacity,
     side: THREE.DoubleSide,
     depthWrite: false,
   })
@@ -278,7 +276,7 @@ function orientCamera(camera, controls, center, radius, direction) {
 
 // =============================================================================
 const CrystalViewer = forwardRef(function CrystalViewer(
-  { structure, displayMode, supercell, customColors, cameraMode, bondOverrides, showPolyhedra },
+  { structure, displayMode, supercell, customColors, cameraMode, bondOverrides, showPolyhedra, polyhedraSettings },
   ref,
 ) {
   const mountRef  = useRef(null)
@@ -602,27 +600,42 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       group.add(mesh)
     }
 
-    if (showPolyhedra && visibleBonds.length) {
+    if (showPolyhedra && visibleBonds.length && polyhedraSettings?.centerSymbols?.length) {
+      const polyCenterSet = new Set(polyhedraSettings.centerSymbols)
+      const polyLigandSymbol = polyhedraSettings.ligandMode === 'symbol' ? polyhedraSettings.ligandSymbol : ''
+      const polyOpacity = Math.min(0.9, Math.max(0.02, polyhedraSettings.opacity ?? 0.28))
+      const polyEdgeRadius = Math.max(
+        0.006,
+        maxLatticeLength(lattice) * 0.0015 * Math.max(0.2, polyhedraSettings.edgeThickness ?? 1),
+      )
+      const edgeCylinderGeo = new THREE.CylinderGeometry(1, 1, 1, 10, 1)
       const neighborMap = new Map()
       for (const bond of visibleBonds) {
         if (!neighborMap.has(bond.i)) neighborMap.set(bond.i, [])
         if (!neighborMap.has(bond.j)) neighborMap.set(bond.j, [])
-        neighborMap.get(bond.i).push(candidateAtoms[bond.j].position)
-        neighborMap.get(bond.j).push(candidateAtoms[bond.i].position)
+        neighborMap.get(bond.i).push({
+          symbol: candidateAtoms[bond.j].symbol,
+          position: candidateAtoms[bond.j].position,
+        })
+        neighborMap.get(bond.j).push({
+          symbol: candidateAtoms[bond.i].symbol,
+          position: candidateAtoms[bond.i].position,
+        })
       }
 
-      for (const [atomIndex, neighborPositions] of neighborMap) {
+      for (const [atomIndex, neighbors] of neighborMap) {
         const atom = candidateAtoms[atomIndex]
         if (!atom?.inside) continue
-        if (getElement(atom.symbol).radius < POLYHEDRA_MIN_RADIUS) continue
+        if (!polyCenterSet.has(atom.symbol)) continue
 
         const uniquePoints = []
         const pointKeys = new Set()
-        for (const position of neighborPositions) {
-          const key = position.map(value => Math.round(value * 1000)).join(',')
+        for (const neighbor of neighbors) {
+          if (polyLigandSymbol && neighbor.symbol !== polyLigandSymbol) continue
+          const key = neighbor.position.map(value => Math.round(value * 1000)).join(',')
           if (pointKeys.has(key)) continue
           pointKeys.add(key)
-          uniquePoints.push(new THREE.Vector3(...position))
+          uniquePoints.push(new THREE.Vector3(...neighbor.position))
         }
         if (uniquePoints.length < POLYHEDRA_MIN_NEIGHBORS) continue
 
@@ -630,19 +643,37 @@ const CrystalViewer = forwardRef(function CrystalViewer(
           const polyGeo = new ConvexGeometry(uniquePoints)
           polyGeo.computeVertexNormals()
 
-          const centerColor = new THREE.Color(customColors?.[atom.symbol] ?? getElementColor(atom.symbol))
-          const polyMesh = new THREE.Mesh(polyGeo, makePolyhedraMaterial(centerColor))
+          const centerColor = new THREE.Color(
+            polyhedraSettings.colorMode === 'custom'
+              ? polyhedraSettings.color
+              : (customColors?.[atom.symbol] ?? getElementColor(atom.symbol)),
+          )
+          const polyMesh = new THREE.Mesh(polyGeo, makePolyhedraMaterial(centerColor, polyOpacity))
           group.add(polyMesh)
 
           const edgeGeo = new THREE.EdgesGeometry(polyGeo, 20)
-          const edgeMat = new THREE.LineBasicMaterial({
-            color: centerColor.clone().multiplyScalar(0.65),
-            transparent: true,
-            opacity: 0.42,
-            depthWrite: false,
-          })
-          const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat)
-          group.add(edgeLines)
+          const edgePositions = edgeGeo.attributes.position?.array
+          if (edgePositions?.length) {
+            const edgeMat = new THREE.MeshLambertMaterial({
+              color: centerColor.clone().multiplyScalar(0.65),
+              transparent: true,
+              opacity: Math.min(0.95, polyOpacity + 0.2),
+              depthWrite: false,
+            })
+            const edgeMesh = new THREE.InstancedMesh(edgeCylinderGeo, edgeMat, edgePositions.length / 6)
+            edgeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+            let edgeIdx = 0
+            for (let i = 0; i < edgePositions.length; i += 6) {
+              const start = [edgePositions[i], edgePositions[i + 1], edgePositions[i + 2]]
+              const end = [edgePositions[i + 3], edgePositions[i + 4], edgePositions[i + 5]]
+              const edgeMatrix = cylinderMatrix(start, end, polyEdgeRadius)
+              if (!edgeMatrix) continue
+              edgeMesh.setMatrixAt(edgeIdx++, edgeMatrix)
+            }
+            edgeMesh.count = edgeIdx
+            edgeMesh.instanceMatrix.needsUpdate = true
+            group.add(edgeMesh)
+          }
         } catch {
           // Degenerate or nearly coplanar neighborhoods can fail convex hull creation.
         }
@@ -697,7 +728,7 @@ const CrystalViewer = forwardRef(function CrystalViewer(
       stateRef.current.resetPos    = cam.position.clone()
       stateRef.current.resetTarget = controls.target.clone()
     }
-  }, [structure, displayMode, supercell, customColors, bondOverrides, showPolyhedra])
+  }, [structure, displayMode, supercell, customColors, bondOverrides, showPolyhedra, polyhedraSettings])
 
   // ---- Imperative handle --------------------------------------------------
   useImperativeHandle(ref, () => ({
