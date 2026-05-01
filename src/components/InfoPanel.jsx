@@ -1,7 +1,23 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { ELEMENTS, getElement, getElementColor } from '../lib/elements.js'
-import { getBondRule } from '../lib/bondingLogic.js'
+import { getBondRule, getBondRuleKey } from '../lib/bondingLogic.js'
 import { BOND_SCALE, MIN_BOND } from '../lib/structure.js'
+
+function getFallbackBondRule(symA, symB) {
+  return {
+    min: MIN_BOND,
+    max: (getElement(symA).radius + getElement(symB).radius) * BOND_SCALE,
+  }
+}
+
+function stateLabel(state) {
+  return {
+    custom: 'Custom',
+    disabled: 'Hidden',
+    default: 'Default',
+    fallback: 'Fallback',
+  }[state] ?? 'Default'
+}
 
 export default function InfoPanel({
   structure,
@@ -9,12 +25,19 @@ export default function InfoPanel({
   onColorChange,
   bondPair,
   onBondPairChange,
+  onBondRuleSelect,
+  bondOverrides,
   bondRule,
   bondRuleState,
   onBondRuleChange,
   onBondRuleCreate,
   onBondRuleDelete,
   onBondRuleReset,
+  onBondRuleResetAll,
+  bondPresets,
+  onBondPresetSave,
+  onBondPresetLoad,
+  onBondPresetDelete,
   showPolyhedra,
   polyhedraSettings,
   effectivePolyhedraCenters,
@@ -25,12 +48,14 @@ export default function InfoPanel({
   onPolyhedraSelectAllCenters,
   onPolyhedraClearCenters,
 }) {
+  const [bondSearch, setBondSearch] = useState('')
+  const [selectedPreset, setSelectedPreset] = useState('')
   const fmt = (n, d = 4) => (typeof n === 'number' ? n.toFixed(d) : '—')
 
   const elementCounts = {}
   if (structure?.atoms) {
-    for (const a of structure.atoms) {
-      elementCounts[a.symbol] = (elementCounts[a.symbol] ?? 0) + 1
+    for (const atom of structure.atoms) {
+      elementCounts[atom.symbol] = (elementCounts[atom.symbol] ?? 0) + 1
     }
   }
 
@@ -39,23 +64,57 @@ export default function InfoPanel({
   }, [onColorChange])
 
   const uniqueSymbols = Object.keys(elementCounts).sort()
-  const activePair = bondPair?.length === 2
-    ? bondPair
-    : [uniqueSymbols[0] ?? 'C', uniqueSymbols[1] ?? uniqueSymbols[0] ?? 'C']
-  const baseBondRule = getBondRule(activePair[0], activePair[1]) ?? {
-    min: MIN_BOND,
-    max: (getElement(activePair[0]).radius + getElement(activePair[1]).radius) * BOND_SCALE,
-  }
+  const activePair = useMemo(() => (
+    bondPair?.length === 2
+      ? bondPair
+      : [uniqueSymbols[0] ?? 'C', uniqueSymbols[1] ?? uniqueSymbols[0] ?? 'C']
+  ), [bondPair, uniqueSymbols])
+  const baseBondRule = getBondRule(activePair[0], activePair[1]) ?? getFallbackBondRule(activePair[0], activePair[1])
   const activeBondRule = bondRule ?? baseBondRule
-  const bondStateLabel = {
-    custom: 'Custom bond',
-    disabled: 'Bond hidden',
-    default: 'Default bond',
-    fallback: 'Radius fallback',
-  }[bondRuleState ?? 'default']
   const activePolyhedraCenters = polyhedraSettings?.centerMode === 'custom'
     ? (polyhedraSettings.centerSymbols ?? [])
     : (effectivePolyhedraCenters ?? [])
+
+  const bondRows = useMemo(() => {
+    const rows = []
+    const query = bondSearch.trim().toLowerCase()
+
+    for (let i = 0; i < uniqueSymbols.length; i++) {
+      for (let j = i; j < uniqueSymbols.length; j++) {
+        const symA = uniqueSymbols[i]
+        const symB = uniqueSymbols[j]
+        const key = getBondRuleKey(symA, symB)
+        const override = bondOverrides?.[key]
+        const baseRuleForRow = getBondRule(symA, symB) ?? getFallbackBondRule(symA, symB)
+        const state = override
+          ? (override.enabled === false ? 'disabled' : 'custom')
+          : (getBondRule(symA, symB) ? 'default' : 'fallback')
+        const rule = override ?? baseRuleForRow
+        const pairLabel = `${symA}-${symB}`
+
+        if (query && !pairLabel.toLowerCase().includes(query) && !`${symB}-${symA}`.toLowerCase().includes(query)) continue
+
+        rows.push({
+          key,
+          symA,
+          symB,
+          state,
+          rule,
+          selected: symA === activePair[0] && symB === activePair[1],
+        })
+      }
+    }
+
+    return rows
+  }, [activePair, bondOverrides, bondSearch, uniqueSymbols])
+
+  const bondStats = useMemo(() => {
+    const stats = { custom: 0, disabled: 0, default: 0, fallback: 0 }
+    for (const row of bondRows) stats[row.state] += 1
+    return stats
+  }, [bondRows])
+
+  const presetNames = Object.keys(bondPresets ?? {}).sort()
 
   if (!structure) {
     return (
@@ -69,33 +128,40 @@ export default function InfoPanel({
 
   return (
     <aside className="info-panel">
-      <section className="info-section">
-        <h3 className="info-heading">Structure</h3>
+      <section className="info-section info-section--card">
+        <div className="section-head">
+          <h3 className="info-heading">Structure</h3>
+          <span className="section-pill">{structure.atoms?.length ?? 0} atoms</span>
+        </div>
         <dl className="info-dl">
           <dt>Space group</dt>
           <dd>{structure.spaceGroup || '—'}</dd>
-          <dt>Atoms</dt>
-          <dd>{structure.atoms?.length ?? 0}</dd>
         </dl>
       </section>
 
       {lp && (
-        <section className="info-section">
-          <h3 className="info-heading">Lattice (Å / °)</h3>
+        <section className="info-section info-section--card">
+          <div className="section-head">
+            <h3 className="info-heading">Lattice</h3>
+            <span className="section-pill">A / deg</span>
+          </div>
           <dl className="info-dl info-dl--grid">
             <dt>a</dt><dd>{fmt(lp.a, 4)}</dd>
             <dt>b</dt><dd>{fmt(lp.b, 4)}</dd>
             <dt>c</dt><dd>{fmt(lp.c, 4)}</dd>
-            <dt>α</dt><dd>{fmt(lp.alpha, 3)}</dd>
-            <dt>β</dt><dd>{fmt(lp.beta,  3)}</dd>
-            <dt>γ</dt><dd>{fmt(lp.gamma, 3)}</dd>
+            <dt>alpha</dt><dd>{fmt(lp.alpha, 3)}</dd>
+            <dt>beta</dt><dd>{fmt(lp.beta, 3)}</dd>
+            <dt>gamma</dt><dd>{fmt(lp.gamma, 3)}</dd>
           </dl>
         </section>
       )}
 
-      {Object.keys(elementCounts).length > 0 && (
-        <section className="info-section">
-          <h3 className="info-heading">Elements</h3>
+      {uniqueSymbols.length > 0 && (
+        <section className="info-section info-section--card">
+          <div className="section-head">
+            <h3 className="info-heading">Elements</h3>
+            <span className="section-pill">{uniqueSymbols.length} types</span>
+          </div>
           <div className="element-swatches">
             {Object.entries(elementCounts).map(([sym, count]) => {
               const el = ELEMENTS[sym] ?? ELEMENTS.XX
@@ -112,7 +178,7 @@ export default function InfoPanel({
                     <span className="swatch-dot" style={{ background: color }} />
                     <span className="swatch-sym">{sym}</span>
                   </label>
-                  <span className="swatch-count">×{count}</span>
+                  <span className="swatch-count">x{count}</span>
                 </div>
               )
             })}
@@ -121,12 +187,12 @@ export default function InfoPanel({
       )}
 
       {uniqueSymbols.length > 0 && (
-        <section className="info-section">
-          <h3 className="info-heading">Polyhedra</h3>
+        <section className="info-section info-section--card">
+          <div className="section-head">
+            <h3 className="info-heading">Polyhedra</h3>
+            <span className="section-pill">{showPolyhedra ? 'Visible' : 'Hidden'}</span>
+          </div>
           <div className="bond-criteria">
-            <div className="bond-criteria-status">
-              {showPolyhedra ? 'Polyhedra visible' : 'Polyhedra hidden'}
-            </div>
             <div className="bond-criteria-row">
               <label className="bond-criteria-field">
                 <span>Centers</span>
@@ -211,7 +277,7 @@ export default function InfoPanel({
                     value={polyhedraSettings?.edgeThickness ?? 1.1}
                     onChange={(e) => onPolyhedraSettingChange?.('edgeThickness', Number.parseFloat(e.target.value))}
                   />
-                  <span>{fmt(polyhedraSettings?.edgeThickness ?? 1.1, 1)}×</span>
+                  <span>{fmt(polyhedraSettings?.edgeThickness ?? 1.1, 1)}x</span>
                 </div>
               </label>
             </div>
@@ -241,10 +307,79 @@ export default function InfoPanel({
       )}
 
       {uniqueSymbols.length > 0 && (
-        <section className="info-section">
-          <h3 className="info-heading">Bond Criteria</h3>
-          <div className="bond-criteria">
-            <div className="bond-criteria-status">{bondStateLabel}</div>
+        <section className="info-section info-section--card">
+          <div className="section-head">
+            <h3 className="info-heading">Bond Manager</h3>
+            <span className="section-pill">{bondRows.length} pairs</span>
+          </div>
+
+          <div className="manager-stats">
+            <span className="manager-stat"><strong>{bondStats.custom}</strong> custom</span>
+            <span className="manager-stat"><strong>{bondStats.disabled}</strong> hidden</span>
+            <span className="manager-stat"><strong>{bondStats.default}</strong> default</span>
+            <span className="manager-stat"><strong>{bondStats.fallback}</strong> fallback</span>
+          </div>
+
+          <div className="manager-toolbar">
+            <input
+              className="manager-search"
+              type="search"
+              placeholder="Search bond pair"
+              value={bondSearch}
+              onChange={(e) => setBondSearch(e.target.value)}
+            />
+            <button className="btn-icon btn-inline" onClick={onBondRuleResetAll} type="button">
+              Reset All
+            </button>
+          </div>
+
+          <div className="preset-toolbar">
+            <select
+              className="manager-search"
+              value={selectedPreset}
+              onChange={(e) => setSelectedPreset(e.target.value)}
+            >
+              <option value="">Bond preset</option>
+              {presetNames.map(name => <option key={name} value={name}>{name}</option>)}
+            </select>
+            <button className="btn-icon btn-inline" onClick={onBondPresetSave} type="button">
+              Save
+            </button>
+            <button className="btn-icon btn-inline" onClick={() => onBondPresetLoad?.(selectedPreset)} type="button" disabled={!selectedPreset}>
+              Load
+            </button>
+            <button className="btn-icon btn-inline" onClick={() => onBondPresetDelete?.(selectedPreset)} type="button" disabled={!selectedPreset}>
+              Delete
+            </button>
+          </div>
+
+          <div className="bond-table">
+            {bondRows.map(row => (
+              <button
+                key={row.key}
+                className={`bond-row${row.selected ? ' active' : ''}`}
+                onClick={() => {
+                  onBondPairChange?.([row.symA, row.symB])
+                  onBondRuleSelect?.([row.symA, row.symB])
+                }}
+                type="button"
+              >
+                <span className="bond-row-pair">{row.symA} - {row.symB}</span>
+                <span className={`bond-state bond-state--${row.state}`}>{stateLabel(row.state)}</span>
+                <span className="bond-row-range">{fmt(row.rule.max, 2)} A</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="bond-editor">
+            <div className="section-head section-head--tight">
+              <div>
+                <div className="bond-editor-title">{activePair[0]} - {activePair[1]}</div>
+                <div className="bond-editor-subtitle">{stateLabel(bondRuleState)}</div>
+              </div>
+              <span className={`bond-state bond-state--${bondRuleState}`}>{stateLabel(bondRuleState)}</span>
+            </div>
+
             <div className="bond-criteria-row">
               <label className="bond-criteria-field">
                 <span>A1</span>
@@ -265,6 +400,7 @@ export default function InfoPanel({
                 </select>
               </label>
             </div>
+
             <div className="bond-criteria-row">
               <label className="bond-criteria-field">
                 <span>Min (A)</span>
@@ -287,12 +423,13 @@ export default function InfoPanel({
                 />
               </label>
             </div>
+
             <div className="bond-criteria-actions">
               <button className="btn-icon btn-inline" onClick={onBondRuleCreate} type="button">
-                Create Bond
+                Create
               </button>
               <button className="btn-icon btn-inline" onClick={onBondRuleDelete} type="button">
-                Delete Bond
+                Hide
               </button>
               <button className="btn-icon btn-inline" onClick={onBondRuleReset} type="button">
                 Use Default

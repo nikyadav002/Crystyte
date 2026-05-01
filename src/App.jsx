@@ -26,6 +26,18 @@ const DEFAULT_POLYHEDRA_SETTINGS = {
   color: '#7b2f82',
   edgeThickness: 1.1,
 }
+const BOND_PRESET_STORAGE_KEY = 'crystyte-bond-presets'
+
+function loadStoredBondPresets() {
+  try {
+    const raw = window.localStorage.getItem(BOND_PRESET_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
 
 function getFallbackBondRule(symA, symB) {
   return {
@@ -53,6 +65,7 @@ export default function App() {
   const [supercell,     setSupercell]     = useState([1, 1, 1])
   const [customColors,  setCustomColors]  = useState({})
   const [bondOverrides, setBondOverrides] = useState({})
+  const [bondPresets,   setBondPresets]   = useState(loadStoredBondPresets)
   const [bondPair,      setBondPair]      = useState(['C', 'C'])
   const [showPolyhedra, setShowPolyhedra] = useState(false)
   const [polyhedraSettings, setPolyhedraSettings] = useState(DEFAULT_POLYHEDRA_SETTINGS)
@@ -66,6 +79,11 @@ export default function App() {
   const viewerRef    = useRef(null)
   const workerRef    = useRef(null)
   const fileInputRef = useRef(null)
+
+  const persistBondPresets = useCallback((nextPresets) => {
+    setBondPresets(nextPresets)
+    window.localStorage.setItem(BOND_PRESET_STORAGE_KEY, JSON.stringify(nextPresets))
+  }, [])
 
   const handleFile = useCallback((text, filename) => {
     setLoading(true)
@@ -189,6 +207,37 @@ export default function App() {
       return next
     })
   }, [effectiveBondPair])
+
+  const handleBondRuleSelect = useCallback((pair) => {
+    setBondPair(pair)
+  }, [])
+
+  const handleBondRuleResetAll = useCallback(() => {
+    setBondOverrides({})
+  }, [])
+
+  const handleBondPresetSave = useCallback(() => {
+    const name = window.prompt('Preset name')
+    const trimmed = name?.trim()
+    if (!trimmed) return
+    persistBondPresets({
+      ...bondPresets,
+      [trimmed]: bondOverrides,
+    })
+  }, [bondOverrides, bondPresets, persistBondPresets])
+
+  const handleBondPresetLoad = useCallback((name) => {
+    if (!name || !bondPresets[name]) return
+    setBondOverrides(bondPresets[name])
+  }, [bondPresets])
+
+  const handleBondPresetDelete = useCallback((name) => {
+    if (!name || !bondPresets[name]) return
+    if (!window.confirm(`Delete preset "${name}"?`)) return
+    const next = { ...bondPresets }
+    delete next[name]
+    persistBondPresets(next)
+  }, [bondPresets, persistBondPresets])
 
   const handlePolyhedraSettingChange = useCallback((field, value) => {
     setPolyhedraSettings(prev => ({ ...prev, [field]: value }))
@@ -368,12 +417,19 @@ export default function App() {
           onColorChange={handleColorChange}
           bondPair={effectiveBondPair}
           onBondPairChange={handleBondPairChange}
+          onBondRuleSelect={handleBondRuleSelect}
+          bondOverrides={bondOverrides}
           bondRule={activeBondRule}
           bondRuleState={activeBondState}
           onBondRuleChange={handleBondRuleChange}
           onBondRuleCreate={handleBondRuleCreate}
           onBondRuleDelete={handleBondRuleDelete}
           onBondRuleReset={handleBondRuleReset}
+          onBondRuleResetAll={handleBondRuleResetAll}
+          bondPresets={bondPresets}
+          onBondPresetSave={handleBondPresetSave}
+          onBondPresetLoad={handleBondPresetLoad}
+          onBondPresetDelete={handleBondPresetDelete}
           showPolyhedra={showPolyhedra}
           polyhedraSettings={polyhedraSettings}
           effectivePolyhedraCenters={effectivePolyhedraCenters}
