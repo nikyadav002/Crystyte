@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
 import { getElement, getElementColor } from '../lib/elements.js'
-import { expandSupercell, detectBonds, cellBoxLines } from '../lib/structure.js'
+import { expandSupercell, detectBonds, cellBoxLines, maxBondLengthForElements } from '../lib/structure.js'
 import { cartToFrac } from '../lib/math.js'
 
 const MODES = {
@@ -142,8 +142,8 @@ function latticeShiftVector(lattice, shift) {
   ]
 }
 
-function shellMargins(lattice) {
-  return lattice.map(v => SHELL_CART_MARGIN / Math.max(Math.hypot(v[0], v[1], v[2]), 1e-6))
+function shellMargins(lattice, cartMargin = SHELL_CART_MARGIN) {
+  return lattice.map(v => cartMargin / Math.max(Math.hypot(v[0], v[1], v[2]), 1e-6))
 }
 
 function isInsideExpandedCell(frac, margins) {
@@ -467,7 +467,11 @@ const CrystalViewer = forwardRef(function CrystalViewer(
     const group = new THREE.Group()
     group.name  = 'structureGroup'
 
-    const margins = lattice ? shellMargins(lattice) : null
+    const bondMargin = Math.max(
+      SHELL_CART_MARGIN,
+      maxBondLengthForElements(atoms.map(atom => atom.symbol), bondOverrides),
+    )
+    const margins = lattice ? shellMargins(lattice, bondMargin) : null
     const candidateAtoms = []
     const atomKeys = new Set()
     const shifts = lattice

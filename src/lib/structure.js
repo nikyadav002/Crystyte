@@ -1,4 +1,4 @@
-import { getElement } from './elements.js'
+import { ELEMENTS, getElement } from './elements.js'
 import { mat3Inv, fracToCart, cartToFrac, micFrac, getLatticeParams, centroid } from './math.js'
 import { getBondRule, getBondRuleKey } from './bondingLogic.js'
 
@@ -232,6 +232,44 @@ export const BOND_SCALE = 1.15   // tolerance factor on sum of covalent radii
 export const MIN_BOND = 0.4      // ignore pairs closer than this (Å)
 const MAX_ATOMS_FOR_BONDS = 8000
 
+function hasKnownElement(symbol) {
+  return Boolean(ELEMENTS[symbol]) && symbol !== 'XX'
+}
+
+function getFallbackBondRule(symA, symB) {
+  return {
+    min: MIN_BOND,
+    max: (getElement(symA).radius + getElement(symB).radius) * BOND_SCALE,
+  }
+}
+
+function getAutomaticBondRule(symA, symB, bondOverrides = {}) {
+  const override = bondOverrides[getBondRuleKey(symA, symB)]
+  if (override?.enabled === false) return null
+  if (override) return override
+
+  const rule = getBondRule(symA, symB)
+  if (rule) return rule
+
+  return hasKnownElement(symA) && hasKnownElement(symB)
+    ? null
+    : getFallbackBondRule(symA, symB)
+}
+
+export function maxBondLengthForElements(symbols, bondOverrides = {}) {
+  const uniqueSymbols = [...new Set(symbols)].filter(Boolean)
+  let maxBond = 0
+
+  for (let i = 0; i < uniqueSymbols.length; i++) {
+    for (let j = i; j < uniqueSymbols.length; j++) {
+      const rule = getAutomaticBondRule(uniqueSymbols[i], uniqueSymbols[j], bondOverrides)
+      if (rule) maxBond = Math.max(maxBond, rule.max)
+    }
+  }
+
+  return maxBond
+}
+
 export function detectBonds(atoms, lattice, Linv, bondOverrides = {}) {
   if (!atoms || atoms.length === 0) return []
   if (atoms.length > MAX_ATOMS_FOR_BONDS) return []
@@ -242,17 +280,14 @@ export function detectBonds(atoms, lattice, Linv, bondOverrides = {}) {
   for (let i = 0; i < atoms.length; i++) {
     const ri = atoms[i].position
     const ri_sym = atoms[i].symbol
-    const ri_rad = getElement(ri_sym).radius
 
     for (let j = i + 1; j < atoms.length; j++) {
       const rj = atoms[j].position
       const rj_sym = atoms[j].symbol
-      const defaultMaxBond = (ri_rad + getElement(rj_sym).radius) * BOND_SCALE
-      const override = bondOverrides[getBondRuleKey(ri_sym, rj_sym)]
-      if (override?.enabled === false) continue
-      const rule = override ?? getBondRule(ri_sym, rj_sym)
+      const rule = getAutomaticBondRule(ri_sym, rj_sym, bondOverrides)
+      if (!rule) continue
       const minBond = Math.max(MIN_BOND, rule?.min ?? 0)
-      const maxBond = rule?.max ?? defaultMaxBond
+      const maxBond = rule.max
 
       let dx = rj[0] - ri[0]
       let dy = rj[1] - ri[1]
